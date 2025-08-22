@@ -1,0 +1,39 @@
+/* style.css dosyasının içeriği */
+
+/* Ana Uygulama Arka Planı İçin Degrade */
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(135deg, #0B1224, #3B2F8E);
+}
+
+/* Yan Menü (Sidebar) Stili */
+[data-testid="stSidebar"] {
+    background-color: #0A1A2F; /* Navy (primary) */
+}
+
+/* KPI Metrik Kartları için Özel Stil */
+[data-testid="stMetric"] {
+    background-color: #111A33; /* Yüzey (card bg) */
+    border: 1px solid #1F2B4A; /* Çerçeve (soft) */
+    border-radius: 16px;
+    padding: 20px;
+}
+
+/* Metrik etiketlerinin (başlıklarının) rengini daha belirgin yapalım */
+[data-testid="stMetricLabel"] {
+    color: #A9B4CF; /* Metin (secondary) */
+}
+
+/* Başarı (Success) durum rengi */
+.success-text {
+    color: #22C55E;
+}
+
+/* Uyarı (Warning) durum rengi */
+.warning-text {
+    color: #FDB022;
+}
+
+/* Tehlike (Danger) durum rengi */
+.danger-text {
+    color: #EF4444;
+}

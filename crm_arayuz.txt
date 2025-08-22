@@ -1,0 +1,95 @@
+import streamlit as st
+import pandas as pd
+
+# --- Sayfa Ayarları (Sayfanın daha profesyonel görünmesi için) ---
+st.set_page_config(
+    page_title="Satış Temsilcisi Raporlama",
+    page_icon="📊",
+    layout="wide"
+)
+
+# --- KULLANICI AYARLARI ---
+DOSYA_YOLU = 'rapor.xls'
+TEMSILCI_SUTUNU = 'ST'
+MUSTERI_SUTUNU = 'Müşteri'
+TUTAR_SUTUNU = 'Kalan Tutar Total'
+
+# --- Fonksiyonlar (Kodun daha düzenli olması için) ---
+
+# Bu fonksiyon Excel'i okur ve ön hazırlığı yapar.
+# @st.cache_data sayesinde Excel sadece bir kere okunur, bu da programı hızlandırır.
+@st.cache_data
+def veri_yukle(dosya_yolu):
+    try:
+        df = pd.read_excel(dosya_yolu)
+        # Hataları önlemek için önemli sütunları metin formatına çeviriyoruz.
+        df[TEMSILCI_SUTUNU] = df[TEMSILCI_SUTUNU].astype(str)
+        df[MUSTERI_SUTUNU] = df[MUSTERI_SUTUNU].astype(str)
+        # Boş (nan) temsilci isimlerini temizleyelim.
+        df = df[df[TEMSILCI_SUTUNU] != 'nan']
+        return df
+    except FileNotFoundError:
+        st.error(f"HATA: '{DOSYA_YOLU}' adında bir dosya bulunamadı! Lütfen dosyanın doğru klasörde olduğundan emin olun.")
+        return None
+    except KeyError as e:
+        st.error(f"HATA: Excel dosyasında '{e}' sütunu bulunamadı! Lütfen yukarıdaki sütun isimlerini kontrol edin.")
+        return None
+
+# Ana veriyi yükleyelim
+df = veri_yukle(DOSYA_YOLU)
+
+# --- ARAYÜZ KISMI ---
+
+# Eğer veri başarıyla yüklendiyse arayüzü göster
+if df is not None:
+    st.title('📊 Satış Temsilcisi Performans Raporu')
+    st.markdown("Bu arayüz, satış temsilcilerinin bakiyelerini ve müşteri dökümlerini interaktif olarak gösterir.")
+
+    # Temsilci listesini al ve başına "Tüm Temsilciler" seçeneği ekle
+    temsilci_listesi = sorted(df[TEMSILCI_SUTUNU].unique())
+    temsilci_listesi.insert(0, "Tüm Temsilciler")
+
+    st.sidebar.header('Filtreleme Seçenekleri')
+    secilen_temsilci = st.sidebar.selectbox(
+        'Görüntülemek istediğiniz temsilciyi seçin:',
+        temsilci_listesi
+    )
+
+    # Seçime göre veriyi filtrele
+    if secilen_temsilci == "Tüm Temsilciler":
+        filtrelenmis_df = df
+        st.header("Tüm Temsilciler Genel Durum")
+    else:
+        filtrelenmis_df = df[df[TEMSILCI_SUTUNU] == secilen_temsilci]
+        st.header(f"{secilen_temsilci} Raporu")
+
+    # Filtrelenmiş veriden hesaplamaları yap
+    toplam_bakiye = filtrelenmis_df[TUTAR_SUTUNU].sum()
+    musteri_sayisi = filtrelenmis_df[MUSTERI_SUTUNU].nunique()
+    pozitif_bakiye_df = filtrelenmis_df[filtrelenmis_df[TUTAR_SUTUNU] > 0]
+    
+    # --- Rapor Kartları (KPI'lar) ---
+    col1, col2 = st.columns(2)
+    col1.metric("Toplam Bakiye", f"{toplam_bakiye:,.2f} TL")
+    col2.metric("Müşteri Sayısı", f"{musteri_sayisi} Müşteri")
+
+    st.markdown("---")
+
+    # --- Müşteri Detayları Tablosu ---
+    st.subheader("Müşteri Bakiye Dökümü (Sadece Pozitif Bakiyeler)")
+    
+    if not pozitif_bakiye_df.empty:
+        # Gösterilecek sütunları seçip yeniden adlandıralım
+        gosterilecek_tablo = pozitif_bakiye_df[[MUSTERI_SUTUNU, TUTAR_SUTUNU, TEMSILCI_SUTUNU]]
+        gosterilecek_tablo = gosterilecek_tablo.rename(
+            columns={
+                MUSTERI_SUTUNU: 'Müşteri Adı',
+                TUTAR_SUTUNU: 'Bakiye (TL)',
+                TEMSILCI_SUTUNU: 'Temsilci'
+            }
+        ).sort_values(by='Bakiye (TL)', ascending=False)
+        
+        # Streamlit'in interaktif tablo özelliğini kullanalım
+        st.dataframe(gosterilecek_tablo, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Seçilen filtreye uygun pozitif bakiye bulunmamaktadır.")

@@ -1,0 +1,89 @@
+/* Sidebar ve Ana Başlık Stilleri */
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@700&display=swap');
+
+body {
+    background-color: #0E1528;
+    color: #E6EAF5;
+    font-family: 'Exo 2', sans-serif;
+}
+
+/* Tüm metrik başlıklarını ve etiketlerini düzenler */
+[data-testid="stMetricLabel"] p {
+    font-size: 1.2rem;
+    color: #FDB022;
+    font-weight: 700;
+}
+
+/* Tüm selectbox ve diğer input etiketlerinin stilini düzenler */
+[data-testid="stFormLabel"] {
+    color: #A9B4CF;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Tüm alt başlık ve açıklama yazılarını renklendirir ve stillerini değiştirir */
+.st-emotion-cache-1216t4c > p {
+    color: #A9B4CF;
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+/* Metrik kartlarını buton gibi gösteren stil */
+[data-testid="stMetric"] {
+    background-color: #111A33;
+    border: 2px solid #3B2F8E;
+    border-radius: 8px;
+    box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.4), inset -2px -2px 4px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+[data-testid="stMetric"]:hover {
+    border-color: #FDB022;
+    box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.6), inset -2px -2px 4px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+/* Giriş ekranı stilleri */
+.stApp.login-bg {
+    background-image: url("arka_plan.jpg");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.login-container {
+    padding: 40px;
+    border-radius: 10px;
+    background-color: rgba(17, 26, 51, 0.85);
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    width: fit-content;
+}
+
+.stTextInput>div>div>input {
+    color: #FDB022;
+    background-color: #0E1528;
+    border: 2px solid #3B2F8E;
+    border-radius: 5px;
+    box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.1);
+}
+
+.stButton>button {
+    color: #111A33;
+    background-color: #FDB022;
+    border-radius: 5px;
+    font-weight: bold;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+}
+
+/* Developer adını sayfanın altına ekler */
+.developer-credit {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    color: #FFD700;
+    font-size: 14px;
+    font-family: 'Exo 2', sans-serif;
+    font-weight: 700;
+    text-shadow: 1px 1px 2px #000;
+}
