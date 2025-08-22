@@ -4,3 +4,4 @@ openpyxl
 streamlit-option-menu
 xlrd
 xlsxwriter
+matplotlib
