@@ -3,6 +3,7 @@ import pandas as pd
 from streamlit_option_menu import option_menu
 from datetime import datetime, timedelta
 import io
+import csv
 
 # --- Sayfa Ayarları ---
 st.set_page_config(page_title="Öz lider CRM", page_icon="👑", layout="wide")
@@ -93,6 +94,8 @@ def solen_borc_excel_oku(dosya_yolu):
 # --- SATIŞ/HEDEF VERİSİNİ AYRIŞTIRMA FONKSİYONU ---
 def parse_satis_hedef_df(df_raw):
     """satis-hedef.xlsx'teki tüm tabloları tek bir DataFrame'de birleştirir."""
+    if df_raw is None:
+        return pd.DataFrame(columns=['SATIŞ'])
     df_raw_copy = df_raw.copy()
     header_indices = df_raw_copy[df_raw_copy.iloc[:, 0].astype(str).str.strip() == 'Satış Temsilcisi'].index.tolist()
     
@@ -133,6 +136,21 @@ def to_excel(df):
     processed_data = output.getvalue()
     return processed_data
 
+# --- LOGLAMA FONKSİYONU ---
+def log_user_activity(user, activity, page_name="N/A"):
+    log_file = 'loglar.csv'
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # IP adresi tespiti (Not: Streamlit'in bulut ortamında IP almak daha karmaşıktır, bu lokal için bir varsayımdır)
+    ip_address = "N/A" # Streamlit'in standart yapısında IP adresi almak doğrudan mümkün değildir.
+    # ip_address = st.query_params.get("ip", ["Unknown"])[0] # Bu satır her zaman çalışmayabilir.
+
+    with open(log_file, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        if f.tell() == 0:
+            writer.writerow(['Zaman Damgası', 'Kullanıcı Adı', 'IP Adresi', 'Sayfa Adı', 'Aktivite'])
+        writer.writerow([timestamp, user, ip_address, page_name, activity])
+        
 # =======================================================================================
 # --- SAYFA FONKSİYONLARI ---
 # =======================================================================================
@@ -181,6 +199,7 @@ def page_genel_bakis(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri):
         st.bar_chart(temsilci_bakiyeleri, color="#FDB022")
     else:
         st.warning("Genel Bakış sayfasını görüntülemek için temel veri dosyalarının yüklenmesi gerekmektedir.")
+
 def page_tum_temsilciler(satis_df, temiz_satis_hedef_df):
     st.title("👥 Tüm Temsilciler Detay Raporu")
     if satis_df is not None:
@@ -214,6 +233,7 @@ def page_tum_temsilciler(satis_df, temiz_satis_hedef_df):
             pozitif_bakiye_df = temsilci_df[temsilci_df['Kalan Tutar Total'] > 0]
             gosterilecek_tablo = pozitif_bakiye_df[['Müşteri', 'Kalan Tutar Total']].rename(columns={'Müşteri': 'Müşteri Adı', 'Kalan Tutar Total': 'Bakiye (TL)'}).sort_values(by='Bakiye (TL)', ascending=False)
             st.dataframe(gosterilecek_tablo, use_container_width=True, hide_index=True)
+
 def page_stok(stok_df):
     st.title("📦 Stok Yönetimi ve Envanter Analizi")
     if stok_df is None: return
@@ -263,6 +283,7 @@ def page_stok(stok_df):
         gosterilecek_sutunlar = [depo_adi_sutunu, urun_kodu_sutunu, urun_adi_sutunu, miktar_sutunu, fiyat_sutunu, brut_tutar_sutunu]
         format_sozlugu = {brut_tutar_sutunu: '{:,.2f} TL', fiyat_sutunu: '{:,.2f} TL'}
     st.dataframe(gosterilecek_nihai_df[gosterilecek_sutunlar].style.apply(highlight_critical, axis=1).format(format_sozlugu), use_container_width=True, hide_index=True)
+
 def page_yaslandirma(satis_df):
     st.title("⏳ Borç Yaşlandırma Analizi")
     if satis_df is None: return
@@ -300,6 +321,7 @@ def page_yaslandirma(satis_df):
         st.markdown("")
         if not dinamik_gecikmis_df.empty:
             st.download_button(label=f"📥 {secilen_gun}+ Gün Raporunu İndir", data=to_excel(dinamik_gecikmis_df), file_name=f"{secilen_temsilcisi}_{secilen_gun}_gun_ustu.xlsx")
+
 def page_satis_hedef(satis_hedef_df):
     st.title("🎯 Satış / Hedef Analizi")
     if satis_hedef_df is None: 
@@ -349,15 +371,18 @@ def page_satis_hedef(satis_hedef_df):
             st.dataframe(style_dataframe(table), use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"Excel dosyası ayrıştırılırken bir hata oluştu. Lütfen dosya formatını kontrol edin. Hata: {e}")
+
 def page_solen(solen_borcu_degeri):
     st.title("🎉 Şölen Cari Hesap Özeti")
     st.markdown("Şölen'e olan güncel borç bakiyesi.")
     st.markdown("---")
     st.metric("Güncel Borç Bakiyesi", f"{solen_borcu_degeri:,.2f} TL")
     st.info("Bu veri `solen_borc.xlsx` dosyasından okunmaktadır.")
+
 def page_hizmet_faturalari():
     st.title("🧾 Hizmet Faturaları")
     st.warning("Bu sayfa şu anda yapım aşamasındadır.")
+
 def page_musteri_analizi(satis_df):
     st.title("👥 Müşteri Analizi")
     if satis_df is None:
@@ -394,6 +419,22 @@ def page_musteri_analizi(satis_df):
         })
     else:
         st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
+
+# --- YENİ EKLENEN FONKSİYON ---
+def page_log_raporlari():
+    st.title("🗒️ Kullanıcı Aktivite Logları")
+    log_file = 'loglar.csv'
+    try:
+        # Log dosyasını oku ve en yeni kayıtlar üstte olacak şekilde sırala
+        log_df = pd.read_csv(log_file)
+        log_df = log_df.sort_values(by='Zaman Damgası', ascending=False)
+        st.info("Kullanıcıların sisteme giriş ve sayfa ziyaret aktiviteleri aşağıda listelenmiştir.")
+        st.dataframe(log_df, use_container_width=True, hide_index=True)
+    except FileNotFoundError:
+        st.warning("Henüz herhangi bir log kaydı bulunmamaktadır.")
+    except Exception as e:
+        st.error(f"Log raporları okunurken bir hata oluştu: {e}")
+
 def add_developer_credit():
     st.markdown("""
     <style>
@@ -410,19 +451,28 @@ def add_developer_credit():
     </style>
     <div class='developer-credit'>DEVELOPED BY FATİH BAKICI</div>
     """, unsafe_allow_html=True)
+
 def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, temiz_satis_hedef_df):
     with st.sidebar:
         st.markdown("""<style>@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@700&display=swap');</style><div style="font-family: 'Exo 2', sans-serif; font-size: 28px; text-align: center; margin-bottom: 20px;"><span style="color: #FDB022;">ÖZLİDER TÜKETİM</span><span style="color: #E6EAF5;">- ŞÖLEN CRM</span></div>""", unsafe_allow_html=True)
+        menu_options = ["Genel Bakış", "Tüm Temsilciler", "Şölen", "Hizmet Faturaları", "Yaşlandırma", "Stok", "Satış/Hedef", "Müşteri Analizi"]
+        menu_icons = ['graph-up', 'people-fill', 'gift-fill', 'receipt-cutoff', 'clock-history', 'box-seam', 'bullseye', 'person-lines-fill']
+        if st.session_state.get('current_user') == "Fatih Bakıcı":
+            menu_options.append("Log Raporları")
+            menu_icons.append('book')
         secim = option_menu(menu_title=None, 
-                            options=["Genel Bakış", "Tüm Temsilciler", "Şölen", "Hizmet Faturaları", "Yaşlandırma", "Stok", "Satış/Hedef", "Müşteri Analizi"], 
-                            icons=['graph-up', 'people-fill', 'gift-fill', 'receipt-cutoff', 'clock-history', 'box-seam', 'bullseye', 'person-lines-fill'], 
-                            menu_icon="cast", 
-                            default_index=0, 
-                            orientation="vertical", 
-                            styles={"container": {"padding": "0!important", "background-color": "transparent"}, 
-                                    "icon": {"color": "#FDB022", "font-size": "20px"}, 
-                                    "nav-link": {"font-size": "16px", "text-align": "left", "margin":"5px", "--hover-color": "#111A33"}, 
-                                    "nav-link-selected": {"background-color": "#3B2F8E"},})
+                                options=menu_options, 
+                                icons=menu_icons, 
+                                menu_icon="cast", 
+                                default_index=0, 
+                                orientation="vertical", 
+                                styles={"container": {"padding": "0!important", "background-color": "transparent"}, 
+                                        "icon": {"color": "#FDB022", "font-size": "20px"}, 
+                                        "nav-link": {"font-size": "16px", "text-align": "left", "margin":"5px", "--hover-color": "#111A33"}, 
+                                        "nav-link-selected": {"background-color": "#3B2F8E"},})
+    if 'last_page' not in st.session_state or st.session_state['last_page'] != secim:
+        log_user_activity(st.session_state['current_user'], f"Sayfa ziyareti: {secim}", page_name=secim)
+        st.session_state['last_page'] = secim
     if secim == "Genel Bakış":
         page_genel_bakis(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri)
     elif secim == "Tüm Temsilciler":
@@ -439,49 +489,73 @@ def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, temiz_satis_
         page_satis_hedef(satis_hedef_df)
     elif secim == "Müşteri Analizi":
         page_musteri_analizi(satis_df)
+    elif secim == "Log Raporları":
+        page_log_raporlari() # Artık bu fonksiyon tanımlı
     add_developer_credit()
-def login_page():
-    # Kodu buraya ekleyeceğiz
-    pass
 
-# --- Ana Uygulama Başlangıcı ---
-# Verileri uygulamanın başında bir kez yüklüyoruz
+def login_page():
+    # Login sayfasında değişiklik yok, olduğu gibi kalabilir.
+    st.markdown("""
+        <style>
+            .stApp {
+                background-color: transparent !important;
+            }
+            .login-container {
+                padding: 40px;
+                border-radius: 10px;
+                background-color: rgba(17, 26, 51, 0.8);
+                text-align: center;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+                margin: auto;
+                width: fit-content;
+            }
+            .stTextInput>div>div>input {
+                color: #FDB022;
+                background-color: #0E1528;
+                border: 2px solid #3B2F8E;
+                border-radius: 5px;
+                box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.1);
+            }
+            .stButton>button {
+                color: #111A33;
+                background-color: #FDB022;
+                border-radius: 5px;
+                font-weight: bold;
+                box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        with st.container():
+            st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+            st.title("🔐 Giriş Ekranı")
+            st.markdown("Lütfen devam etmek için kullanıcı adı ve şifrenizi girin.")
+            usernames = list(USER_CREDENTIALS.keys())
+            selected_username = st.selectbox("Kullanıcı Adı", usernames, key='username_select')
+            password = st.text_input("Şifre", type="password", key='password_input')
+            if st.button("Giriş Yap", key='login_button'):
+                if USER_CREDENTIALS.get(selected_username) == password:
+                    st.session_state['logged_in'] = True
+                    st.session_state['current_user'] = selected_username
+                    log_user_activity(selected_username, "Giriş Yaptı")
+                    st.success("Giriş başarılı!")
+                    st.rerun()
+                else:
+                    st.error("Hatalı şifre.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+# --- ANA KOD AKIŞI ---
 satis_df_cache = satis_veri_yukle('rapor.xls')
 stok_df_cache = stok_veri_yukle('stok.xls')
 satis_hedef_df_cache = satis_hedef_veri_yukle('satis-hedef.xlsx')
 solen_borcu_degeri_cache = solen_borc_excel_oku('solen_borc.xlsx')
 temiz_satis_hedef_df_cache = parse_satis_hedef_df(satis_hedef_df_cache)
 
-# Kullanıcı veritabanı
-USER_CREDENTIALS = {
-    "Mustafa Karcı": "0144",
-    "M. Ali Çakılca": "0151",
-    "Gökhan Gülmez": "0101",
-    "Fatih Bakıcı": "0134"
-}
-
-# --- Uygulama Akışı ---
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
 if st.session_state['logged_in']:
     main_app(satis_df_cache, stok_df_cache, satis_hedef_df_cache, solen_borcu_degeri_cache, temiz_satis_hedef_df_cache)
 else:
-    # Giriş ekranı
-    st.title("🔐 Giriş Ekranı")
-    st.markdown("Lütfen devam etmek için kullanıcı adı ve şifrenizi girin.")
-    
-    # st.selectbox ile kullanıcı adı seçimi
-    usernames = list(USER_CREDENTIALS.keys())
-    selected_username = st.selectbox("Kullanıcı Adı", usernames)
-    
-    password = st.text_input("Şifre", type="password")
-    
-    if st.button("Giriş Yap"):
-        if USER_CREDENTIALS.get(selected_username) == password:
-            st.session_state['logged_in'] = True
-            st.session_state['current_user'] = selected_username
-            st.success("Giriş başarılı!")
-            st.rerun()
-        else:
-            st.error("Hatalı şifre.")
+    login_page()
