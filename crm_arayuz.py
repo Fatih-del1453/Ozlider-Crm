@@ -9,8 +9,20 @@ st.set_page_config(page_title="Öz lider CRM", page_icon="👑", layout="wide")
 
 # --- Özel CSS Fonksiyonu ---
 def local_css(file_name):
-    # Artık harici CSS kullanmıyoruz, bu fonksiyon boş kalacak
-    pass
+    try:
+        with open(file_name, encoding='utf-8') as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning(f"'{file_name}' adında bir stil dosyası bulunamadı.")
+local_css("style.css")
+
+# --- Kullanıcı Bilgileri ---
+USER_CREDENTIALS = {
+    "Mustafa Karcı": "0144",
+    "M. Ali Çakılca": "0151",
+    "Gökhan Gülmez": "0101",
+    "Fatih Bakıcı": "0134"
+}
 
 # --- İsimleri Normalleştirme Fonksiyonu ---
 def normalize_turkish_names(name):
@@ -120,98 +132,6 @@ def to_excel(df):
     writer.close()
     processed_data = output.getvalue()
     return processed_data
-
-# --- GİRİŞ EKRANI İÇİN STİLLER ---
-st.markdown("""
-<style>
-    /* Genel Uygulama Stilleri */
-    @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@700&display=swap');
-    
-    body {
-        background-color: #0E1528;
-        color: #E6EAF5;
-        font-family: 'Exo 2', sans-serif;
-    }
-
-    /* Metrik kartlarını buton gibi gösteren stil */
-    [data-testid="stMetric"] {
-        background-color: #111A33;
-        border: 2px solid #3B2F8E;
-        border-radius: 8px;
-        box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.4), inset -2px -2px 4px rgba(0, 0, 0, 0.2);
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    }
-
-    [data-testid="stMetric"]:hover {
-        border-color: #FDB022;
-        box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.6), inset -2px -2px 4px rgba(0, 0, 0, 0.2);
-        transform: translateY(-2px);
-    }
-
-    /* Metrik başlıklarını sarı renkte gösterir */
-    [data-testid="stMetricLabel"] {
-        color: #FDB022;
-        font-weight: 700;
-    }
-
-    /* Tüm alt başlık ve açıklama yazılarını renklendirir ve stillerini değiştirir */
-    .st-emotion-cache-1216t4c > p {
-        color: #A9B4CF;
-        font-size: 1rem;
-        font-weight: 400;
-    }
-
-    /* Selectbox ve input etiketleri */
-    [data-testid="stFormLabel"] {
-        color: #A9B4CF;
-        font-size: 1.1rem;
-        font-weight: 600;
-    }
-
-    /* Input ve Selectbox'lar için stil */
-    [data-testid="stInputContainer"] {
-        background-color: #111A33;
-        border: 2px solid #3B2F8E;
-        border-radius: 8px;
-        box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.4), inset -2px -2px 4px rgba(0, 0, 0, 0.2);
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
-    }
-
-    [data-testid="stInputContainer"]:hover {
-        border-color: #FDB022;
-        box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.6), inset -2px -2px 4px rgba(0, 0, 0, 0.2);
-    }
-    
-    [data-testid="stInputContainer"] div {
-        color: #FDB022 !important;
-        font-size: 1.1rem;
-        font-family: 'Exo 2', sans-serif;
-        font-weight: 500;
-    }
-
-    /* Giriş sayfası için özel stil */
-    .login-body {
-        background-image: url("arka_plan.jpg");
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-    }
-    .stApp.login-bg > header {
-        display: none;
-    }
-
-    .developer-credit {
-        position: fixed;
-        bottom: 10px;
-        right: 10px;
-        color: #FFD700;
-        font-size: 14px;
-        font-family: 'Exo 2', sans-serif;
-        font-weight: 700;
-        text-shadow: 1px 1px 2px #000;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # =======================================================================================
 # --- SAYFA FONKSİYONLARI ---
@@ -521,85 +441,47 @@ def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, temiz_satis_
         page_musteri_analizi(satis_df)
     add_developer_credit()
 def login_page():
-    # Bu fonksiyon, harici CSS dosyasından stilleri çeker
-    st.markdown("""
-        <style>
-            .stApp {
-                background-image: url("arka_plan.jpg");
-                background-size: cover;
-                background-position: center;
-                background-repeat: no-repeat;
-            }
-            .main {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-            }
-            .login-container {
-                padding: 40px;
-                border-radius: 10px;
-                background-color: rgba(17, 26, 51, 0.85); /* Hafif saydam bir kutu */
-                text-align: center;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-                width: 400px;
-            }
-            .stTextInput>div>div>input {
-                color: #FDB022;
-                background-color: #0E1528;
-                border: 2px solid #3B2F8E;
-                border-radius: 5px;
-                box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.1);
-            }
-            .stButton>button {
-                color: #111A33;
-                background-color: #FDB022;
-                border-radius: 5px;
-                font-weight: bold;
-                box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
-            }
-            .developer-credit {
-                position: fixed;
-                bottom: 10px;
-                right: 10px;
-                color: #FFD700;
-                font-size: 14px;
-                font-family: 'Exo 2', sans-serif;
-                font-weight: 700;
-                text-shadow: 1px 1px 2px #000;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        with st.container():
-            st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-            st.title("🔐 Giriş Ekranı")
-            st.markdown("Lütfen devam etmek için kullanıcı adı ve şifrenizi girin.")
-            st.session_state['username'] = st.text_input("Kullanıcı Adı")
-            st.session_state['password'] = st.text_input("Şifre", type="password")
-            if st.button("Giriş Yap"):
-                if st.session_state['username'] == "admin" and st.session_state['password'] == "12345":
-                    st.session_state['logged_in'] = True
-                    st.success("Giriş başarılı!")
-                    st.rerun()
-                else:
-                    st.error("Hatalı kullanıcı adı veya şifre.")
-            st.markdown("</div>", unsafe_allow_html=True)
-    
-    st.markdown("<div class='developer-credit'>DEVELOPED BY FATİH BAKICI</div>", unsafe_allow_html=True)
+    # Kodu buraya ekleyeceğiz
+    pass
 
+# --- Ana Uygulama Başlangıcı ---
+# Verileri uygulamanın başında bir kez yüklüyoruz
 satis_df_cache = satis_veri_yukle('rapor.xls')
 stok_df_cache = stok_veri_yukle('stok.xls')
 satis_hedef_df_cache = satis_hedef_veri_yukle('satis-hedef.xlsx')
 solen_borcu_degeri_cache = solen_borc_excel_oku('solen_borc.xlsx')
 temiz_satis_hedef_df_cache = parse_satis_hedef_df(satis_hedef_df_cache)
 
+# Kullanıcı veritabanı
+USER_CREDENTIALS = {
+    "Mustafa Karcı": "0144",
+    "M. Ali Çakılca": "0151",
+    "Gökhan Gülmez": "0101",
+    "Fatih Bakıcı": "0134"
+}
+
+# --- Uygulama Akışı ---
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
 if st.session_state['logged_in']:
     main_app(satis_df_cache, stok_df_cache, satis_hedef_df_cache, solen_borcu_degeri_cache, temiz_satis_hedef_df_cache)
 else:
-    login_page()
+    # Giriş ekranı
+    st.title("🔐 Giriş Ekranı")
+    st.markdown("Lütfen devam etmek için kullanıcı adı ve şifrenizi girin.")
+    
+    # st.selectbox ile kullanıcı adı seçimi
+    usernames = list(USER_CREDENTIALS.keys())
+    selected_username = st.selectbox("Kullanıcı Adı", usernames)
+    
+    password = st.text_input("Şifre", type="password")
+    
+    if st.button("Giriş Yap"):
+        if USER_CREDENTIALS.get(selected_username) == password:
+            st.session_state['logged_in'] = True
+            st.session_state['current_user'] = selected_username
+            st.success("Giriş başarılı!")
+            st.rerun()
+        else:
+            st.error("Hatalı şifre.")
