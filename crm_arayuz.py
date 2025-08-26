@@ -216,7 +216,9 @@ def page_tum_temsilciler(satis_df, satis_hedef_df):
     if secilen_temsilci:
         st.markdown(f"### {secilen_temsilci} Raporu")
         
-        personel_hedef_df = satis_hedef_df[satis_hedef_df['Satış Temsilcisi'] == secilen_temsilci]
+        # --- DÜZELTME: İsimler normalize edilerek karşılaştırılıyor ---
+        normalized_name = normalize_turkish_names(secilen_temsilci)
+        personel_hedef_df = satis_hedef_df[satis_hedef_df['ST_normal'] == normalized_name]
         toplam_satis = personel_hedef_df['SATIŞ'].sum()
         
         temsilci_df = satis_df[satis_df['ST'] == secilen_temsilci]
