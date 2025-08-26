@@ -4,6 +4,8 @@ from streamlit_option_menu import option_menu
 from datetime import datetime, timedelta
 import io
 import csv
+import plotly.graph_objects as go # Grafik için eklendi
+import plotly.express as px      # Grafik için eklendi
 
 # --- Sayfa Ayarları ---
 st.set_page_config(page_title="Öz lider CRM", page_icon="👑", layout="wide")
@@ -320,55 +322,162 @@ def page_yaslandirma(satis_df):
         if not dinamik_gecikmis_df.empty:
             st.download_button(label=f"📥 {secilen_gun}+ Gün Raporunu İndir", data=to_excel(dinamik_gecikmis_df), file_name=f"{secilen_temsilcisi}_{secilen_gun}_gun_ustu.xlsx")
 
+# --- YENİDEN YAZILAN FONKSİYON ---
 def page_satis_hedef(satis_hedef_df):
     st.title("🎯 Satış / Hedef Analizi")
-    if satis_hedef_df is None: 
-        st.warning("Lütfen `Raporlama` klasörüne `satis-hedef.xlsx` dosyasını ekleyin.")
+
+    if satis_hedef_df is None:
+        st.warning("Lütfen `satis-hedef.xlsx` dosyasını yükleyin.")
         return
-    st.markdown("Temsilci gruplarına göre satış ve hedef performanslarını görsel olarak analiz edin.")
+
     try:
+        # 1. VERİYİ TEMİZLEME VE HAZIRLAMA
         df_raw = satis_hedef_df.copy()
         header_indices = df_raw[df_raw.iloc[:, 0].astype(str).str.strip() == 'Satış Temsilcisi'].index.tolist()
-        tables_raw = []
+        
+        all_tables = []
         for i in range(len(header_indices)):
             start_index = header_indices[i]
             end_index = header_indices[i+1] if i + 1 < len(header_indices) else None
-            table_title_index = start_index - 1 if start_index > 0 else 0
-            tables_raw.append((df_raw.iloc[table_title_index, 0], df_raw.iloc[start_index:end_index]))
-        def clean_table(df):
-            df = df.dropna(axis=0, how='all').dropna(axis=1, how='all').reset_index(drop=True)
-            if df.empty or len(df) < 2: return None
-            new_header = df.iloc[0]
-            df = df[1:]
-            df.columns = new_header
-            df.columns = df.columns.str.strip()
+            
+            table = df_raw.iloc[start_index:end_index].dropna(axis=0, how='all').dropna(axis=1, how='all').reset_index(drop=True)
+            if table.empty or len(table) < 2: continue
+            
+            new_header = table.iloc[0]
+            table = table[1:].copy()
+            table.columns = new_header
+            table.columns = table.columns.str.strip()
+            
             for col in ['HEDEF', 'SATIŞ', '%', 'KALAN']:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            return df
-        cleaned_tables = [(title, clean_table(t)) for title, t in tables_raw]
-        cleaned_tables = [item for item in cleaned_tables if item[1] is not None]
-        toplam_hedef = 0; toplam_satis = 0; toplam_kalan = 0
-        for title, table in cleaned_tables:
-            if 'TOPLAM' in table['Satış Temsilcisi'].values:
-                total_row = table[table['Satış Temsilcisi'] == 'TOPLAM']
-                toplam_hedef += total_row['HEDEF'].sum()
-                toplam_satis += total_row['SATIŞ'].sum()
-                toplam_kalan += total_row['KALAN'].sum()
+                if col in table.columns:
+                    table[col] = pd.to_numeric(table[col], errors='coerce').fillna(0)
+            
+            table_title = df_raw.iloc[start_index - 1, 0] if start_index > 0 else f"Grup {i+1}"
+            table['Grup'] = table_title
+            all_tables.append(table)
+
+        if not all_tables:
+            st.error("Excel dosyasında geçerli bir tablo bulunamadı.")
+            return
+
+        final_df = pd.concat(all_tables, ignore_index=True)
+
+        # 2. GENEL TOPLAM VERİLERİNİ HESAPLAMA
+        total_row = final_df[final_df['Satış Temsilcisi'].str.strip() == 'TOPLAM']
+        toplam_hedef = total_row['HEDEF'].sum()
+        toplam_satis = total_row['SATIŞ'].sum()
+        
+        # 3. GÖRSELLEŞTİRME
+        st.subheader("Genel Performans Durumu")
+        
+        # Gösterge (Gauge) Grafiği
+        gauge_fig = go.Figure(go.Indicator(
+            mode = "gauge+number+delta",
+            value = toplam_satis,
+            number = {'prefix': "₺", 'valueformat': ',.0f'},
+            domain = {'x': [0, 1], 'y': [0.1, 1]}, # Y ekseninde yukarı kaydırıldı
+            title = {'text': f"<b>Aylık Toplam Satış</b><br><span style='font-size:1.0em;color:#FDB022;'><b>Hedef: ₺{toplam_hedef:,.0f}</b></span>", 'font': {"size": 24}},
+            delta = {'reference': toplam_hedef, 'relative': False, 'valueformat': ',.0f', 'increasing': {'color': "#2ECC71"}, 'decreasing': {'color': "#E74C3C"}},
+            gauge = {
+                'axis': {'range': [None, toplam_hedef * 1.2], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': "#FDB022"},
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "gray",
+                'steps': [
+                    {'range': [0, toplam_hedef * 0.5], 'color': '#FADBD8'},
+                    {'range': [toplam_hedef * 0.5, toplam_hedef * 0.8], 'color': '#FDEBD0'}],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': toplam_hedef
+                }
+            }
+        ))
+        
+        # --- GÜNCELLENDİ: Yüzde, Kalan Tutar'ın altına yerleştirildi ve renklendirildi ---
+        tamamlanma_yuzdesi = (toplam_satis / toplam_hedef * 100) if toplam_hedef > 0 else 0
+        gauge_fig.add_annotation(
+            x=0.5, y=0.05, # Y pozisyonu en alta çekildi
+            text=f"<b>%{tamamlanma_yuzdesi:.1f} Tamamlandı</b>",
+            font=dict(size=22, color="#FDB022"),
+            showarrow=False
+        )
+        gauge_fig.update_layout(height=450) # Yüksekliği biraz artırıldı
+        st.plotly_chart(gauge_fig, use_container_width=True)
+
         st.markdown("---")
-        kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric("Genel Toplam Hedef", f"{toplam_hedef:,.2f} TL")
-        kpi2.metric("Genel Toplam Satış", f"{toplam_satis:,.2f} TL")
-        kpi3.metric("Genel Toplam Kalan", f"{toplam_kalan:,.2f} TL")
-        st.markdown("---")
-        def style_dataframe(df):
-            df_display = df[df['Satış Temsilcisi'] != 'TOPLAM']
-            return df_display.style.format({'HEDEF': '{:,.2f} TL', 'SATIŞ': '{:,.2f} TL', 'KALAN': '{:,.2f} TL', '%': '{:,.2f}%'}).background_gradient(cmap='RdYlGn', subset=['%'], vmin=0, vmax=120)
-        for title, table in cleaned_tables:
-            st.subheader(title)
-            st.dataframe(style_dataframe(table), use_container_width=True, hide_index=True)
+
+        # Gruplandırılmış Bar Grafiği
+        st.subheader("Temsilci ve Grup Bazında Performans")
+        
+        personel_df = final_df[final_df['Satış Temsilcisi'].str.strip() != 'TOPLAM'].copy()
+        personel_df = personel_df[personel_df['HEDEF'] > 0]
+        
+        personel_df['Performans'] = (personel_df['SATIŞ'] / personel_df['HEDEF'] * 100).fillna(0)
+        
+        personel_df['Y_Axis_Label'] = personel_df.apply(
+            lambda row: f"{row['Satış Temsilcisi']} (%{row['Performans']:.0f})", axis=1
+        )
+        
+        personel_df = personel_df.sort_values(by='Performans', ascending=True)
+
+        bar_fig = go.Figure()
+        
+        bar_fig.add_trace(go.Bar(
+            y=personel_df['Y_Axis_Label'],
+            x=personel_df['HEDEF'],
+            name='Hedef',
+            orientation='h',
+            text=personel_df['HEDEF'],
+            marker=dict(color='rgba(58, 71, 80, 0.6)', line=dict(color='rgba(58, 71, 80, 1.0)', width=1))
+        ))
+        bar_fig.add_trace(go.Bar(
+            y=personel_df['Y_Axis_Label'],
+            x=personel_df['SATIŞ'],
+            name='Satış',
+            orientation='h',
+            text=personel_df['SATIŞ'],
+            marker=dict(color='#FDB022', line=dict(color='#D35400', width=1))
+        ))
+        
+        bar_fig.update_traces(
+            texttemplate='₺%{x:,.0f}', 
+            textposition='outside',
+            textfont_size=12
+        )
+        
+        bar_fig.update_layout(
+            title_text='Satış Temsilcisi Hedef & Satış Karşılaştırması',
+            barmode='group',
+            yaxis_title=None, # "Satış Temsilcisi" yazısını kaldırdık
+            xaxis_title="Tutar (TL)",
+            legend_title="Gösterge",
+            height=600,
+            margin=dict(l=50, r=50, t=70, b=70),
+            # --- GÜNCELLENDİ: Temsilci adları renklendirildi, büyütüldü ve kalınlaştırıldı ---
+            yaxis=dict(
+                categoryorder='total ascending',
+                tickfont=dict(
+                    family="Arial Black, sans-serif", # Kalın bir font ailesi
+                    size=15, 
+                    color="#FDB022"
+                )
+            ),
+            bargap=0.30, 
+            bargroupgap=0.1
+        )
+        st.plotly_chart(bar_fig, use_container_width=True)
+        
+        with st.expander("Detaylı Veri Tablolarını Görüntüle"):
+            for title, table in final_df.groupby('Grup'):
+                st.subheader(title)
+                df_display = table[table['Satış Temsilcisi'] != 'TOPLAM']
+                st.dataframe(df_display.style.format({'HEDEF': '{:,.2f} TL', 'SATIŞ': '{:,.2f} TL', 'KALAN': '{:,.2f} TL', '%': '{:,.2f}%'}).background_gradient(cmap='RdYlGn', subset=['%'], vmin=0, vmax=120), use_container_width=True, hide_index=True)
+
     except Exception as e:
-        st.error(f"Excel dosyası ayrıştırılırken bir hata oluştu. Lütfen dosya formatını kontrol edin. Hata: {e}")
+        st.error(f"Grafikler oluşturulurken veya Excel dosyası ayrıştırılırken bir hata oluştu. Lütfen dosya formatını kontrol edin. Hata: {e}")
+
 
 def page_solen(solen_borcu_degeri):
     st.title("🎉 Şölen Cari Hesap Özeti")
@@ -418,12 +527,10 @@ def page_musteri_analizi(satis_df):
     else:
         st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
 
-# --- YENİ EKLENEN FONKSİYON ---
 def page_log_raporlari():
     st.title("🗒️ Kullanıcı Aktivite Logları")
     log_file = 'loglar.csv'
     try:
-        # Log dosyasını oku ve en yeni kayıtlar üstte olacak şekilde sırala
         log_df = pd.read_csv(log_file)
         log_df = log_df.sort_values(by='Zaman Damgası', ascending=False)
         st.info("Kullanıcıların sisteme giriş ve sayfa ziyaret aktiviteleri aşağıda listelenmiştir.")
@@ -452,7 +559,6 @@ def add_developer_credit():
 
 def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, temiz_satis_hedef_df):
     with st.sidebar:
-        # DÜZELTİLDİ: Deprecation uyarısı için use_container_width kullanıldı
         st.image("logo.jpeg", use_container_width=True)
         
         st.markdown("""<style>@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@700&display=swap');</style><div style="font-family: 'Exo 2', sans-serif; font-size: 28px; text-align: center; margin-bottom: 20px;"><span style="color: #FDB022;">ÖZLİDER TÜKETİM</span><span style="color: #E6EAF5;">- ŞÖLEN CRM</span></div>""", unsafe_allow_html=True)
