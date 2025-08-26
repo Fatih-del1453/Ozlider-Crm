@@ -141,9 +141,7 @@ def log_user_activity(user, activity, page_name="N/A"):
     log_file = 'loglar.csv'
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    # IP adresi tespiti (Not: Streamlit'in bulut ortamında IP almak daha karmaşıktır, bu lokal için bir varsayımdır)
-    ip_address = "N/A" # Streamlit'in standart yapısında IP adresi almak doğrudan mümkün değildir.
-    # ip_address = st.query_params.get("ip", ["Unknown"])[0] # Bu satır her zaman çalışmayabilir.
+    ip_address = "N/A" 
 
     with open(log_file, 'a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
@@ -454,6 +452,9 @@ def add_developer_credit():
 
 def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, temiz_satis_hedef_df):
     with st.sidebar:
+        # DÜZELTİLDİ: Deprecation uyarısı için use_container_width kullanıldı
+        st.image("logo.jpeg", use_container_width=True)
+        
         st.markdown("""<style>@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@700&display=swap');</style><div style="font-family: 'Exo 2', sans-serif; font-size: 28px; text-align: center; margin-bottom: 20px;"><span style="color: #FDB022;">ÖZLİDER TÜKETİM</span><span style="color: #E6EAF5;">- ŞÖLEN CRM</span></div>""", unsafe_allow_html=True)
         menu_options = ["Genel Bakış", "Tüm Temsilciler", "Şölen", "Hizmet Faturaları", "Yaşlandırma", "Stok", "Satış/Hedef", "Müşteri Analizi"]
         menu_icons = ['graph-up', 'people-fill', 'gift-fill', 'receipt-cutoff', 'clock-history', 'box-seam', 'bullseye', 'person-lines-fill']
@@ -490,11 +491,10 @@ def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, temiz_satis_
     elif secim == "Müşteri Analizi":
         page_musteri_analizi(satis_df)
     elif secim == "Log Raporları":
-        page_log_raporlari() # Artık bu fonksiyon tanımlı
+        page_log_raporlari()
     add_developer_credit()
 
 def login_page():
-    # Login sayfasında değişiklik yok, olduğu gibi kalabilir.
     st.markdown("""
         <style>
             .stApp {
@@ -527,6 +527,8 @@ def login_page():
     """, unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
+        st.image("logo.jpeg", width=250)
+
         with st.container():
             st.markdown("<div class='login-container'>", unsafe_allow_html=True)
             st.title("🔐 Giriş Ekranı")
