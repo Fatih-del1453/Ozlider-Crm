@@ -5,3 +5,4 @@ streamlit-option-menu
 xlrd
 xlsxwriter
 matplotlib
+plotly
