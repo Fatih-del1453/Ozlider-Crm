@@ -4,8 +4,8 @@ from streamlit_option_menu import option_menu
 from datetime import datetime, timedelta
 import io
 import csv
-import plotly.graph_objects as go # Grafik için eklendi
-import plotly.express as px      # Grafik için eklendi
+import plotly.graph_objects as go
+import plotly.express as px
 
 # --- Sayfa Ayarları ---
 st.set_page_config(page_title="Öz lider CRM", page_icon="👑", layout="wide")
@@ -161,27 +161,11 @@ def page_genel_bakis(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri):
         toplam_bakiye = satis_df['Kalan Tutar Total'].sum()
         toplam_stok_degeri = stok_df['Brüt Tutar'].sum()
         col1, col2, col3 = st.columns(3)
-        with col1: st.metric("Toplam Bakiye (TL)", f"{toplam_bakiye:,.2f}", delta="1.2%")
+        with col1: st.metric("Toplam Bakiye (TL)", f"{toplam_bakiye:,.2f}")
         with col2: st.metric("Toplam Stok Değeri (Brüt)", f"{toplam_stok_degeri:,.2f} TL")
         with col3: st.metric("Şölen'e Olan Borç", f"{solen_borcu_degeri:,.2f} TL")
         st.markdown("---")
-        if satis_hedef_df is not None:
-            st.subheader("Genel Satış & Hedef Performansı")
-            try:
-                toplam_hedef = 0; toplam_satis = 0; toplam_kalan = 0
-                temp_df = satis_hedef_df.dropna(how='all').reset_index(drop=True)
-                total_rows = temp_df[temp_df.iloc[:, 0].astype(str).str.strip() == 'TOPLAM']
-                if not total_rows.empty:
-                    toplam_hedef = pd.to_numeric(total_rows.iloc[:, 1], errors='coerce').sum()
-                    toplam_satis = pd.to_numeric(total_rows.iloc[:, 2], errors='coerce').sum()
-                    toplam_kalan = pd.to_numeric(total_rows.iloc[:, 3], errors='coerce').sum()
-                kpi1, kpi2, kpi3 = st.columns(3)
-                kpi1.metric("Genel Toplam Hedef", f"{toplam_hedef:,.2f} TL")
-                kpi2.metric("Genel Toplam Satış", f"{toplam_satis:,.2f} TL")
-                kpi3.metric("Genel Toplam Kalan", f"{toplam_kalan:,.2f} TL")
-            except Exception:
-                st.warning("Satış/Hedef özeti hesaplanamadı.")
-            st.markdown("---")
+        
         st.subheader("Vadesi Geçmiş Alacak Özeti (Tüm Temsilciler)")
         gecikmis_df_genel = satis_df[(satis_df['Gün'] > 0) & (satis_df['Kalan Tutar Total'] > 0)]
         gun_1_35_genel = gecikmis_df_genel[(gecikmis_df_genel['Gün'] > 0) & (gecikmis_df_genel['Gün'] <= 35)]['Kalan Tutar Total'].sum()
@@ -194,9 +178,50 @@ def page_genel_bakis(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri):
         kpi_col3.metric("45+ Gün Geçikme", f"{ustu_45_gun_genel:,.2f} TL")
         kpi_col4.metric("60+ Gün Geçikme (Riskli)", f"{ustu_60_gun_genel:,.2f} TL", delta_color="inverse")
         st.markdown("---")
-        st.subheader("Temsilci Bazında Toplam Bakiyeler")
-        temsilci_bakiyeleri = satis_df.groupby('ST')['Kalan Tutar Total'].sum().sort_values(ascending=False)
-        st.bar_chart(temsilci_bakiyeleri, color="#FDB022")
+
+        st.subheader("Temsilci Bazında Müşteri Bakiyelerinin Dağılımı")
+
+        col1_chart, col2_table = st.columns([2, 1]) 
+
+        with col1_chart:
+            temsilci_bakiyeleri = satis_df[satis_df['Kalan Tutar Total'] > 0].groupby('ST')['Kalan Tutar Total'].sum().reset_index()
+            temsilci_bakiyeleri.columns = ['Satış Temsilcisi', 'Toplam Bakiye']
+            temsilci_bakiyeleri['parent'] = "Toplam Bakiye" 
+            
+            fig = px.sunburst(
+                temsilci_bakiyeleri,
+                path=['parent', 'Satış Temsilcisi'],
+                values='Toplam Bakiye',
+                color='Toplam Bakiye',
+                color_continuous_scale='YlOrRd',
+                title="Temsilcilerin Toplam Bakiyedeki Payları"
+            )
+            
+            fig.update_traces(
+                textinfo='label+percent parent',
+                hovertemplate='<b>%{label}</b><br>Bakiye: ₺%{value:,.2f}<extra></extra>'
+            )
+            fig.update_layout(
+                margin=dict(t=50, l=25, r=25, b=25),
+                height=500
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2_table:
+            st.write("#### En Yüksek Bakiyeli Temsilciler")
+            top_temsilciler_df = temsilci_bakiyeleri[['Satış Temsilcisi', 'Toplam Bakiye']].sort_values(by='Toplam Bakiye', ascending=False).reset_index(drop=True)
+            
+            # --- DÜZELTME 1: Rakamları sola hizalamak için string'e çevirip gösteriyoruz ---
+            display_df = top_temsilciler_df.copy()
+            display_df['Bakiye (TL)'] = display_df['Toplam Bakiye'].apply(lambda x: f"₺{x:,.2f}")
+
+            st.dataframe(
+                display_df[['Satış Temsilcisi', 'Bakiye (TL)']],
+                use_container_width=True,
+                hide_index=True
+            )
+
     else:
         st.warning("Genel Bakış sayfasını görüntülemek için temel veri dosyalarının yüklenmesi gerekmektedir.")
 
@@ -322,7 +347,7 @@ def page_yaslandirma(satis_df):
         if not dinamik_gecikmis_df.empty:
             st.download_button(label=f"📥 {secilen_gun}+ Gün Raporunu İndir", data=to_excel(dinamik_gecikmis_df), file_name=f"{secilen_temsilcisi}_{secilen_gun}_gun_ustu.xlsx")
 
-# --- YENİDEN YAZILAN FONKSİYON ---
+# --- DÜZELTME 2: Satış/Hedef sayfasının tam fonksiyonlu hali geri eklendi ---
 def page_satis_hedef(satis_hedef_df):
     st.title("🎯 Satış / Hedef Analizi")
 
@@ -331,7 +356,6 @@ def page_satis_hedef(satis_hedef_df):
         return
 
     try:
-        # 1. VERİYİ TEMİZLEME VE HAZIRLAMA
         df_raw = satis_hedef_df.copy()
         header_indices = df_raw[df_raw.iloc[:, 0].astype(str).str.strip() == 'Satış Temsilcisi'].index.tolist()
         
@@ -339,7 +363,6 @@ def page_satis_hedef(satis_hedef_df):
         for i in range(len(header_indices)):
             start_index = header_indices[i]
             end_index = header_indices[i+1] if i + 1 < len(header_indices) else None
-            
             table = df_raw.iloc[start_index:end_index].dropna(axis=0, how='all').dropna(axis=1, how='all').reset_index(drop=True)
             if table.empty or len(table) < 2: continue
             
@@ -362,20 +385,17 @@ def page_satis_hedef(satis_hedef_df):
 
         final_df = pd.concat(all_tables, ignore_index=True)
 
-        # 2. GENEL TOPLAM VERİLERİNİ HESAPLAMA
         total_row = final_df[final_df['Satış Temsilcisi'].str.strip() == 'TOPLAM']
         toplam_hedef = total_row['HEDEF'].sum()
         toplam_satis = total_row['SATIŞ'].sum()
         
-        # 3. GÖRSELLEŞTİRME
         st.subheader("Genel Performans Durumu")
         
-        # Gösterge (Gauge) Grafiği
         gauge_fig = go.Figure(go.Indicator(
             mode = "gauge+number+delta",
             value = toplam_satis,
             number = {'prefix': "₺", 'valueformat': ',.0f'},
-            domain = {'x': [0, 1], 'y': [0.1, 1]}, # Y ekseninde yukarı kaydırıldı
+            domain = {'x': [0, 1], 'y': [0.1, 1]},
             title = {'text': f"<b>Aylık Toplam Satış</b><br><span style='font-size:1.0em;color:#FDB022;'><b>Hedef: ₺{toplam_hedef:,.0f}</b></span>", 'font': {"size": 24}},
             delta = {'reference': toplam_hedef, 'relative': False, 'valueformat': ',.0f', 'increasing': {'color': "#2ECC71"}, 'decreasing': {'color': "#E74C3C"}},
             gauge = {
@@ -390,25 +410,21 @@ def page_satis_hedef(satis_hedef_df):
                 'threshold': {
                     'line': {'color': "red", 'width': 4},
                     'thickness': 0.75,
-                    'value': toplam_hedef
-                }
-            }
+                    'value': toplam_hedef}}
         ))
         
-        # --- GÜNCELLENDİ: Yüzde, Kalan Tutar'ın altına yerleştirildi ve renklendirildi ---
         tamamlanma_yuzdesi = (toplam_satis / toplam_hedef * 100) if toplam_hedef > 0 else 0
         gauge_fig.add_annotation(
-            x=0.5, y=0.05, # Y pozisyonu en alta çekildi
+            x=0.5, y=0.08,
             text=f"<b>%{tamamlanma_yuzdesi:.1f} Tamamlandı</b>",
             font=dict(size=22, color="#FDB022"),
             showarrow=False
         )
-        gauge_fig.update_layout(height=450) # Yüksekliği biraz artırıldı
+        gauge_fig.update_layout(height=450)
         st.plotly_chart(gauge_fig, use_container_width=True)
 
         st.markdown("---")
 
-        # Gruplandırılmış Bar Grafiği
         st.subheader("Temsilci ve Grup Bazında Performans")
         
         personel_df = final_df[final_df['Satış Temsilcisi'].str.strip() != 'TOPLAM'].copy()
@@ -450,16 +466,15 @@ def page_satis_hedef(satis_hedef_df):
         bar_fig.update_layout(
             title_text='Satış Temsilcisi Hedef & Satış Karşılaştırması',
             barmode='group',
-            yaxis_title=None, # "Satış Temsilcisi" yazısını kaldırdık
+            yaxis_title=None,
             xaxis_title="Tutar (TL)",
             legend_title="Gösterge",
             height=600,
             margin=dict(l=50, r=50, t=70, b=70),
-            # --- GÜNCELLENDİ: Temsilci adları renklendirildi, büyütüldü ve kalınlaştırıldı ---
             yaxis=dict(
                 categoryorder='total ascending',
                 tickfont=dict(
-                    family="Arial Black, sans-serif", # Kalın bir font ailesi
+                    family="Arial Black, sans-serif",
                     size=15, 
                     color="#FDB022"
                 )
@@ -478,7 +493,6 @@ def page_satis_hedef(satis_hedef_df):
     except Exception as e:
         st.error(f"Grafikler oluşturulurken veya Excel dosyası ayrıştırılırken bir hata oluştu. Lütfen dosya formatını kontrol edin. Hata: {e}")
 
-
 def page_solen(solen_borcu_degeri):
     st.title("🎉 Şölen Cari Hesap Özeti")
     st.markdown("Şölen'e olan güncel borç bakiyesi.")
@@ -490,6 +504,7 @@ def page_hizmet_faturalari():
     st.title("🧾 Hizmet Faturaları")
     st.warning("Bu sayfa şu anda yapım aşamasındadır.")
 
+# --- DÜZELTME 3: Müşteri Analizi sayfasının tam fonksiyonlu hali geri eklendi ---
 def page_musteri_analizi(satis_df):
     st.title("👥 Müşteri Analizi")
     if satis_df is None:
@@ -527,6 +542,7 @@ def page_musteri_analizi(satis_df):
     else:
         st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
 
+# --- DÜZELTME 4: Log Raporları sayfasının tam fonksiyonlu hali geri eklendi ---
 def page_log_raporlari():
     st.title("🗒️ Kullanıcı Aktivite Logları")
     log_file = 'loglar.csv'
