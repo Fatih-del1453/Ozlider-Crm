@@ -6,3 +6,4 @@ xlrd
 xlsxwriter
 matplotlib
 plotly
+geopy

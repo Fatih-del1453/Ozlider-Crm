@@ -87,6 +87,21 @@ def solen_borc_excel_oku(dosya_yolu):
         return 0.0
 
 @st.cache_data
+def ciro_veri_yukle(dosya_yolu):
+    try:
+        df = pd.read_excel(dosya_yolu)
+        df.columns = df.columns.str.strip()
+        if 'Müşteri Ünvanı' not in df.columns or 'Brüt Fiyat' not in df.columns:
+            st.error(f"`{dosya_yolu}` dosyasında 'Müşteri Ünvanı' ve 'Brüt Fiyat' sütunları bulunmalıdır.")
+            return pd.DataFrame()
+        return df
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        st.error(f"Ciro verisi ('{dosya_yolu}') okunurken bir hata oluştu: {e}")
+        return pd.DataFrame()
+
+@st.cache_data
 def parse_satis_hedef_excel_robust(df_raw):
     """satis-hedef.xlsx'teki tüm tabloları ve grupları okuyup tek bir DataFrame'e çevirir."""
     if df_raw is None:
@@ -216,7 +231,6 @@ def page_tum_temsilciler(satis_df, satis_hedef_df):
     if secilen_temsilci:
         st.markdown(f"### {secilen_temsilci} Raporu")
         
-        # --- DÜZELTME: İsimler normalize edilerek karşılaştırılıyor ---
         normalized_name = normalize_turkish_names(secilen_temsilci)
         personel_hedef_df = satis_hedef_df[satis_hedef_df['ST_normal'] == normalized_name]
         toplam_satis = personel_hedef_df['SATIŞ'].sum()
@@ -386,8 +400,6 @@ def page_satis_hedef(final_df):
 
 def page_solen(solen_borcu_degeri):
     st.title("🎉 Şölen Cari Hesap Özeti")
-    st.markdown("Şölen'e olan güncel borç bakiyesi.")
-    st.markdown("---")
     st.metric("Güncel Borç Bakiyesi", f"{solen_borcu_degeri:,.2f} TL")
     st.info("Bu veri `solen_borc.xlsx` dosyasından okunmaktadır.")
 
@@ -395,37 +407,45 @@ def page_hizmet_faturalari():
     st.title("🧾 Hizmet Faturaları")
     st.warning("Bu sayfa şu anda yapım aşamasındadır.")
 
-def page_musteri_analizi(satis_df):
+def page_musteri_analizi(satis_df, ciro_df):
     st.title("👥 Müşteri Analizi")
-    if satis_df is None:
-        st.warning("Müşteri analizi için satış verileri (rapor.xls) yüklenemedi.")
-        return
     st.markdown("Değerli, sadık veya hareketsiz müşterilerinizi keşfedin.")
     st.markdown("---")
-    st.subheader("🥇 En Değerli Müşteriler (Ciro)")
-    top_n = st.slider("Listelenecek müşteri sayısı:", 5, 50, 10, step=5)
-    en_degerli_musteriler = satis_df.groupby('Müşteri')['Kalan Tutar Total'].sum().sort_values(ascending=False).head(top_n).reset_index()
-    en_degerli_musteriler.rename(columns={'Müşteri': 'Müşteri Adı', 'Kalan Tutar Total': 'Toplam Bakiye (TL)'}, inplace=True)
-    st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True, column_config={"Toplam Bakiye (TL)": st.column_config.NumberColumn(format="%.2f TL")})
-    st.markdown("---")
-    st.subheader("❤️ Sadık Müşteriler (İşlem Sayısı)")
-    top_n_sadik = st.slider("Listelenecek sadık müşteri sayısı:", 5, 50, 10, step=5, key='sadik_slider')
-    sadik_musteriler = satis_df['Müşteri'].value_counts().head(top_n_sadik).reset_index()
-    sadik_musteriler.columns = ['Müşteri Adı', 'Toplam İşlem Sayısı']
-    st.dataframe(sadik_musteriler, use_container_width=True, hide_index=True)
-    st.markdown("---")
-    st.subheader("😴 'Uyuyan' Müşteriler")
-    son_islem_gunleri = satis_df.groupby('Müşteri')['Gün'].max().reset_index()
-    son_islem_gunleri.columns = ['Müşteri', 'Gecikme Günü']
-    bugunun_tarihi = datetime.today().date()
-    son_islem_gunleri['Son İşlem Tarihi'] = son_islem_gunleri['Gecikme Günü'].apply(lambda x: bugunun_tarihi - pd.Timedelta(days=x) if pd.notna(x) else None)
-    gecikme_gunu = st.slider("İşlem görmeyen minimum gün sayısı:", 30, 180, 60)
-    uyuyan_musteriler = son_islem_gunleri[son_islem_gunleri['Gecikme Günü'] >= gecikme_gunu].sort_values(by='Gecikme Günü', ascending=False)
-    if not uyuyan_musteriler.empty:
-        st.info(f"Son işlemi **{gecikme_gunu} günden** eski olan müşteriler listeleniyor.")
-        st.dataframe(uyuyan_musteriler[['Müşteri', 'Gecikme Günü', 'Son İşlem Tarihi']], use_container_width=True, hide_index=True, column_config={"Gecikme Günü": "Gecikme Günü", "Son İşlem Tarihi": st.column_config.DateColumn(format="YYYY-MM-DD")})
+    
+    st.subheader("🥇 En Değerli Müşteriler (Yıllık Ciroya Göre)")
+    if ciro_df is None:
+        st.warning("En değerli müşterileri görüntülemek için projenizin ana klasörüne `2025_satış_toplam.xlsx` dosyasını ekleyin.")
+    elif ciro_df.empty:
+        st.error("`2025_satış_toplam.xlsx` dosyası boş veya formatı hatalı. Lütfen 'Müşteri Ünvanı' ve 'Brüt Fiyat' sütunlarının varlığını kontrol edin.")
     else:
-        st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
+        top_n = st.slider("Listelenecek müşteri sayısı:", 5, 50, 10, step=5, key='degerli_slider')
+        en_degerli_musteriler = ciro_df.groupby('Müşteri Ünvanı')['Brüt Fiyat'].sum().sort_values(ascending=False).head(top_n).reset_index()
+        en_degerli_musteriler.rename(columns={'Müşteri Ünvanı': 'Müşteri Adı', 'Brüt Fiyat': 'Toplam Ciro (TL)'}, inplace=True)
+        st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True, column_config={"Toplam Ciro (TL)": st.column_config.NumberColumn(format="₺ %.2f")})
+
+    if satis_df is not None:
+        st.markdown("---")
+        st.subheader("❤️ Sadık Müşteriler (İşlem Sayısı)")
+        top_n_sadik = st.slider("Listelenecek sadık müşteri sayısı:", 5, 50, 10, step=5, key='sadik_slider')
+        sadik_musteriler = satis_df['Müşteri'].value_counts().head(top_n_sadik).reset_index()
+        sadik_musteriler.columns = ['Müşteri Adı', 'Toplam İşlem Sayısı']
+        st.dataframe(sadik_musteriler, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.subheader("😴 'Uyuyan' Müşteriler (Son İşlem Tarihine Göre)")
+        son_islem_gunleri = satis_df.groupby('Müşteri')['Gün'].max().reset_index()
+        son_islem_gunleri.columns = ['Müşteri', 'Gecikme Günü']
+        bugunun_tarihi = datetime.today().date()
+        son_islem_gunleri['Son İşlem Tarihi'] = son_islem_gunleri['Gecikme Günü'].apply(lambda x: bugunun_tarihi - pd.Timedelta(days=x) if pd.notna(x) else None)
+        gecikme_gunu = st.slider("İşlem görmeyen minimum gün sayısı:", 30, 180, 60)
+        uyuyan_musteriler = son_islem_gunleri[son_islem_gunleri['Gecikme Günü'] >= gecikme_gunu].sort_values(by='Gecikme Günü', ascending=False)
+        if not uyuyan_musteriler.empty:
+            st.info(f"Son işlemi **{gecikme_gunu} günden** eski olan müşteriler listeleniyor.")
+            st.dataframe(uyuyan_musteriler[['Müşteri', 'Gecikme Günü', 'Son İşlem Tarihi']], use_container_width=True, hide_index=True, column_config={"Gecikme Günü": "Gecikme Günü", "Son İşlem Tarihi": st.column_config.DateColumn(format="YYYY-MM-DD")})
+        else:
+            st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
+    else:
+        st.warning("Sadık ve uyuyan müşterileri analiz etmek için `rapor.xls` dosyası gereklidir.")
 
 def page_log_raporlari():
     st.title("🗒️ Kullanıcı Aktivite Logları")
@@ -442,8 +462,6 @@ def page_log_raporlari():
         
 def page_senaryo_analizi(satis_df, stok_df, satis_hedef_df):
     st.title("♟️ Senaryo Analizi (What-If)")
-    st.info("Bu araç, potansiyel kararların sonuçlarını öngörmenize yardımcı olur. Kontrol araçlarıyla oynayarak sonuçları anlık olarak gözlemleyebilirsiniz.")
-
     if satis_df is None or stok_df is None or satis_hedef_df is None or satis_hedef_df.empty:
         st.warning("Bu modülün çalışması için `rapor.xls`, `stok.xls` ve `satis-hedef.xlsx` dosyalarının yüklenmiş olması gerekmektedir.")
         return
@@ -517,7 +535,7 @@ def add_developer_credit():
     <div class='developer-credit'>DEVELOPED BY FATİH BAKICI</div>
     """, unsafe_allow_html=True)
 
-def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri):
+def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, ciro_df):
     with st.sidebar:
         st.image("logo.jpeg", use_container_width=True)
         st.markdown("""<style>@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@700&display=swap');</style><div style="font-family: 'Exo 2', sans-serif; font-size: 28px; text-align: center; margin-bottom: 20px;"><span style="color: #FDB022;">ÖZLİDER TÜKETİM</span><span style="color: #E6EAF5;">- ŞÖLEN CRM</span></div>""", unsafe_allow_html=True)
@@ -557,7 +575,7 @@ def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri):
     elif secim == "Senaryo Analizi":
         page_senaryo_analizi(satis_df, stok_df, satis_hedef_df)
     elif secim == "Müşteri Analizi":
-        page_musteri_analizi(satis_df)
+        page_musteri_analizi(satis_df, ciro_df)
     elif secim == "Şölen":
         page_solen(solen_borcu_degeri)
     elif secim == "Hizmet Faturaları":
@@ -626,11 +644,12 @@ stok_df_cache = stok_veri_yukle('stok.xls')
 satis_hedef_df_raw_cache = satis_hedef_veri_yukle('satis-hedef.xlsx')
 solen_borcu_degeri_cache = solen_borc_excel_oku('solen_borc.xlsx')
 temiz_satis_hedef_df_cache = parse_satis_hedef_excel_robust(satis_hedef_df_raw_cache)
+ciro_df_cache = ciro_veri_yukle('2025_satış_toplam.xlsx')
 
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
 if st.session_state['logged_in']:
-    main_app(satis_df_cache, stok_df_cache, temiz_satis_hedef_df_cache, solen_borcu_degeri_cache)
+    main_app(satis_df_cache, stok_df_cache, temiz_satis_hedef_df_cache, solen_borcu_degeri_cache, ciro_df_cache)
 else:
     login_page()
