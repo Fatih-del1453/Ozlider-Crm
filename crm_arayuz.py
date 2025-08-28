@@ -133,7 +133,6 @@ def parse_satis_hedef_excel_robust(df_raw):
     except Exception:
         return pd.DataFrame()
 
-# --- EXCEL'E DÖNÜŞTÜRME YARDIMCI FONKSİYONU ---
 def to_excel(df):
     output = io.BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
@@ -142,7 +141,6 @@ def to_excel(df):
     processed_data = output.getvalue()
     return processed_data
 
-# --- LOGLAMA FONKSİYONU ---
 def log_user_activity(user, activity, page_name="N/A"):
     log_file = 'loglar.csv'
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -154,12 +152,11 @@ def log_user_activity(user, activity, page_name="N/A"):
         writer.writerow([timestamp, user, ip_address, page_name, activity])
         
 # =======================================================================================
-# --- TÜM SAYFA FONKSİYONLARI (TAM VE DÜZELTİLMİŞ HALLERİ) ---
+# --- SAYFA FONKSİYONLARI ---
 # =======================================================================================
 
 def page_genel_bakis(satis_df, stok_df, solen_borcu_degeri):
     st.title("📈 Genel Bakış")
-    st.markdown("İşletmenizin genel durumunu gösteren anahtar performans göstergeleri.")
     if satis_df is not None and stok_df is not None:
         toplam_bakiye = satis_df['Kalan Tutar Total'].sum()
         toplam_stok_degeri = stok_df['Brüt Tutar'].sum()
@@ -168,7 +165,6 @@ def page_genel_bakis(satis_df, stok_df, solen_borcu_degeri):
         with col2: st.metric("Toplam Stok Değeri (Brüt)", f"{toplam_stok_degeri:,.2f} TL")
         with col3: st.metric("Şölen'e Olan Borç", f"{solen_borcu_degeri:,.2f} TL")
         st.markdown("---")
-        
         st.subheader("Vadesi Geçmiş Alacak Özeti (Tüm Temsilciler)")
         gecikmis_df_genel = satis_df[(satis_df['Gün'] > 0) & (satis_df['Kalan Tutar Total'] > 0)]
         gun_1_35_genel = gecikmis_df_genel[(gecikmis_df_genel['Gün'] > 0) & (gecikmis_df_genel['Gün'] <= 35)]['Kalan Tutar Total'].sum()
@@ -181,34 +177,22 @@ def page_genel_bakis(satis_df, stok_df, solen_borcu_degeri):
         kpi_col3.metric("45+ Gün Geçikme", f"{ustu_45_gun_genel:,.2f} TL")
         kpi_col4.metric("60+ Gün Geçikme (Riskli)", f"{ustu_60_gun_genel:,.2f} TL", delta_color="inverse")
         st.markdown("---")
-
         st.subheader("Temsilci Bazında Müşteri Bakiyelerinin Dağılımı")
         col1_chart, col2_table = st.columns([2, 1]) 
-
         with col1_chart:
             temsilci_bakiyeleri = satis_df[satis_df['Kalan Tutar Total'] > 0].groupby('ST')['Kalan Tutar Total'].sum().reset_index()
             temsilci_bakiyeleri.columns = ['Satış Temsilcisi', 'Toplam Bakiye']
             temsilci_bakiyeleri['parent'] = "Toplam Bakiye" 
-            
-            fig = px.sunburst(
-                temsilci_bakiyeleri,
-                path=['parent', 'Satış Temsilcisi'],
-                values='Toplam Bakiye',
-                color='Toplam Bakiye',
-                color_continuous_scale='YlOrRd',
-                title="Temsilcilerin Toplam Bakiyedeki Payları"
-            )
+            fig = px.sunburst(temsilci_bakiyeleri, path=['parent', 'Satış Temsilcisi'], values='Toplam Bakiye', color='Toplam Bakiye', color_continuous_scale='YlOrRd', title="Temsilcilerin Toplam Bakiyedeki Payları")
             fig.update_traces(textinfo='label+percent parent', hovertemplate='<b>%{label}</b><br>Bakiye: ₺%{value:,.2f}<extra></extra>')
             fig.update_layout(margin=dict(t=50, l=25, r=25, b=25), height=500)
             st.plotly_chart(fig, use_container_width=True)
-
         with col2_table:
             st.write("#### En Yüksek Bakiyeli Temsilciler")
             top_temsilciler_df = temsilci_bakiyeleri[['Satış Temsilcisi', 'Toplam Bakiye']].sort_values(by='Toplam Bakiye', ascending=False).reset_index(drop=True)
             display_df = top_temsilciler_df.copy()
             display_df['Bakiye (TL)'] = display_df['Toplam Bakiye'].apply(lambda x: f"₺{x:,.2f}")
             st.dataframe(display_df[['Satış Temsilcisi', 'Bakiye (TL)']], use_container_width=True, hide_index=True)
-
     else:
         st.warning("Genel Bakış sayfasını görüntülemek için temel veri dosyalarının yüklenmesi gerekmektedir.")
 
@@ -217,31 +201,25 @@ def page_tum_temsilciler(satis_df, satis_hedef_df):
     if satis_df is None or satis_hedef_df is None or satis_hedef_df.empty:
         st.warning("Bu sayfayı görüntülemek için `rapor.xls` ve `satis-hedef.xlsx` dosyalarının yüklenmesi gerekmektedir.")
         return
-        
     toplam_musteri = satis_df['Müşteri'].nunique()
     toplam_temsilci = satis_df['ST'].nunique()
     col1, col2 = st.columns(2)
     with col1: st.metric("Toplam Müşteri Sayısı", f"{toplam_musteri}")
     with col2: st.metric("Aktif Temsilci Sayısı", f"{toplam_temsilci}")
     st.markdown("---")
-    
     temsilci_listesi = sorted(satis_df['ST'].unique())
     secilen_temsilci = st.selectbox('İncelemek istediğiniz temsilciyi seçin:', temsilci_listesi)
-    
     if secilen_temsilci:
         st.markdown(f"### {secilen_temsilci} Raporu")
-        
         normalized_name = normalize_turkish_names(secilen_temsilci)
         personel_hedef_df = satis_hedef_df[satis_hedef_df['ST_normal'] == normalized_name]
         toplam_satis = personel_hedef_df['SATIŞ'].sum()
-        
         temsilci_df = satis_df[satis_df['ST'] == secilen_temsilci]
         toplam_bakiye = temsilci_df['Kalan Tutar Total'].sum()
         musteri_sayisi = temsilci_df['Müşteri'].nunique()
         gecikmis_df_temsilci = temsilci_df[(temsilci_df['Gün'] > 0) & (temsilci_df['Kalan Tutar Total'] > 0)]
         ustu_35_gun_temsilci = gecikmis_df_temsilci[gecikmis_df_temsilci['Gün'] > 35]['Kalan Tutar Total'].sum()
         ustu_60_gun_temsilci = gecikmis_df_temsilci[gecikmis_df_temsilci['Gün'] > 60]['Kalan Tutar Total'].sum()
-        
         kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
         kpi_col1.metric("Toplam Satış Cirosu", f"{toplam_satis:,.2f} TL")
         kpi_col2.metric("Toplam Bakiye", f"{toplam_bakiye:,.2f} TL")
@@ -253,6 +231,9 @@ def page_tum_temsilciler(satis_df, satis_hedef_df):
         st.subheader("Müşteri Bakiye Dökümü")
         pozitif_bakiye_df = temsilci_df[temsilci_df['Kalan Tutar Total'] > 0]
         gosterilecek_tablo = pozitif_bakiye_df[['Müşteri', 'Kalan Tutar Total']].rename(columns={'Müşteri': 'Müşteri Adı', 'Kalan Tutar Total': 'Bakiye (TL)'}).sort_values(by='Bakiye (TL)', ascending=False)
+        
+        # GÜNCELLENDİ: Rakam formatlaması eklendi (Türkçe format için)
+        gosterilecek_tablo['Bakiye (TL)'] = gosterilecek_tablo['Bakiye (TL)'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         st.dataframe(gosterilecek_tablo, use_container_width=True, hide_index=True)
 
 def page_stok(stok_df):
@@ -421,7 +402,10 @@ def page_musteri_analizi(satis_df, ciro_df):
         top_n = st.slider("Listelenecek müşteri sayısı:", 5, 50, 10, step=5, key='degerli_slider')
         en_degerli_musteriler = ciro_df.groupby('Müşteri Ünvanı')['Brüt Fiyat'].sum().sort_values(ascending=False).head(top_n).reset_index()
         en_degerli_musteriler.rename(columns={'Müşteri Ünvanı': 'Müşteri Adı', 'Brüt Fiyat': 'Toplam Ciro (TL)'}, inplace=True)
-        st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True, column_config={"Toplam Ciro (TL)": st.column_config.NumberColumn(format="₺ %.2f")})
+        
+        # GÜNCELLENDİ: Rakam formatlaması eklendi (Türkçe format için)
+        en_degerli_musteriler['Toplam Ciro (TL)'] = en_degerli_musteriler['Toplam Ciro (TL)'].apply(lambda x: f"₺{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True)
 
     if satis_df is not None:
         st.markdown("---")
