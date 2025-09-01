@@ -165,17 +165,101 @@ def page_genel_bakis(satis_df, stok_df, solen_borcu_degeri):
         with col2: st.metric("Toplam Stok Değeri (Brüt)", f"{toplam_stok_degeri:,.2f} TL")
         with col3: st.metric("Şölen'e Olan Borç", f"{solen_borcu_degeri:,.2f} TL")
         st.markdown("---")
+        
+        # ==================================================================
+        # GÜNCELLENEN BÖLÜM BAŞLANGICI
+        # ==================================================================
         st.subheader("Vadesi Geçmiş Alacak Özeti (Tüm Temsilciler)")
         gecikmis_df_genel = satis_df[(satis_df['Gün'] > 0) & (satis_df['Kalan Tutar Total'] > 0)]
         gun_1_35_genel = gecikmis_df_genel[(gecikmis_df_genel['Gün'] > 0) & (gecikmis_df_genel['Gün'] <= 35)]['Kalan Tutar Total'].sum()
         ustu_35_gun_genel = gecikmis_df_genel[gecikmis_df_genel['Gün'] > 35]['Kalan Tutar Total'].sum()
         ustu_45_gun_genel = gecikmis_df_genel[gecikmis_df_genel['Gün'] > 45]['Kalan Tutar Total'].sum()
         ustu_60_gun_genel = gecikmis_df_genel[gecikmis_df_genel['Gün'] > 60]['Kalan Tutar Total'].sum()
-        kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
-        kpi_col1.metric("1-35 Gün Arası Alacak", f"{gun_1_35_genel:,.2f} TL")
-        kpi_col2.metric("35+ Gün Geçikme", f"{ustu_35_gun_genel:,.2f} TL")
-        kpi_col3.metric("45+ Gün Geçikme", f"{ustu_45_gun_genel:,.2f} TL")
-        kpi_col4.metric("60+ Gün Geçikme (Riskli)", f"{ustu_60_gun_genel:,.2f} TL", delta_color="inverse")
+
+        # Rakamları formatlayalım
+        gun_1_35_str = f"{gun_1_35_genel:,.2f} TL"
+        ustu_35_gun_str = f"{ustu_35_gun_genel:,.2f} TL"
+        ustu_45_gun_str = f"{ustu_45_gun_genel:,.2f} TL"
+        ustu_60_gun_str = f"{ustu_60_gun_genel:,.2f} TL"
+
+        # Kartlar için özel CSS ve HTML yapısı
+        st.markdown(f"""
+        <style>
+            .kpi-container {{
+                display: flex;
+                gap: 15px;
+                align-items: stretch;
+            }}
+            .main-kpi-box {{
+                flex: 2;
+                background-color: #ffffff;
+                border: 1px solid #e0e0e0;
+                border-radius: 12px;
+                padding: 15px;
+                display: flex;
+                align-items: center;
+                justify-content: space-around;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            }}
+            .kpi-card {{
+                flex: 1;
+                color: white;
+                border-radius: 10px;
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                text-align: center;
+                min-height: 140px;
+            }}
+            .kpi-card.green {{ background-color: #28a745; }}
+            .kpi-card.yellow {{ background-color: #ffc107; color: #333; }}
+            .kpi-card.orange {{ background-color: #fd7e14; }}
+            .kpi-card.red {{ background-color: #dc3545; }}
+            .kpi-title {{ 
+                font-size: 16px; 
+                font-weight: 600; 
+                margin-bottom: 10px; 
+            }}
+            .kpi-value {{ 
+                font-size: 26px; 
+                font-weight: bold; 
+            }}
+            .chain-icon {{
+                font-size: 32px;
+                color: #4a4a4a;
+                padding: 0 10px;
+                align-self: center;
+            }}
+        </style>
+        
+        <div class="kpi-container">
+            <div class="main-kpi-box">
+                <div class="kpi-card green">
+                    <div class="kpi-title">1-35 Gün Arası Alacak</div>
+                    <div class="kpi-value">{gun_1_35_str}</div>
+                </div>
+                <div class="chain-icon">🔗</div>
+                <div class="kpi-card yellow">
+                    <div class="kpi-title">35+ Gün Gecikme</div>
+                    <div class="kpi-value">{ustu_35_gun_str}</div>
+                </div>
+            </div>
+            <div class="kpi-card orange">
+                <div class="kpi-title">45+ Gün Gecikme</div>
+                <div class="kpi-value">{ustu_45_gun_str}</div>
+            </div>
+            <div class="kpi-card red">
+                <div class="kpi-title">60+ Gün Gecikme (Riskli)</div>
+                <div class="kpi-value">{ustu_60_gun_str}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        # ==================================================================
+        # GÜNCELLENEN BÖLÜM SONU
+        # ==================================================================
+        
+        st.markdown("<br>", unsafe_allow_html=True) 
         st.markdown("---")
         st.subheader("Temsilci Bazında Müşteri Bakiyelerinin Dağılımı")
         col1_chart, col2_table = st.columns([2, 1]) 
@@ -232,7 +316,6 @@ def page_tum_temsilciler(satis_df, satis_hedef_df):
         pozitif_bakiye_df = temsilci_df[temsilci_df['Kalan Tutar Total'] > 0]
         gosterilecek_tablo = pozitif_bakiye_df[['Müşteri', 'Kalan Tutar Total']].rename(columns={'Müşteri': 'Müşteri Adı', 'Kalan Tutar Total': 'Bakiye (TL)'}).sort_values(by='Bakiye (TL)', ascending=False)
         
-        # GÜNCELLENDİ: Rakam formatlaması eklendi (Türkçe format için)
         gosterilecek_tablo['Bakiye (TL)'] = gosterilecek_tablo['Bakiye (TL)'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         st.dataframe(gosterilecek_tablo, use_container_width=True, hide_index=True)
 
@@ -403,7 +486,6 @@ def page_musteri_analizi(satis_df, ciro_df):
         en_degerli_musteriler = ciro_df.groupby('Müşteri Ünvanı')['Brüt Fiyat'].sum().sort_values(ascending=False).head(top_n).reset_index()
         en_degerli_musteriler.rename(columns={'Müşteri Ünvanı': 'Müşteri Adı', 'Brüt Fiyat': 'Toplam Ciro (TL)'}, inplace=True)
         
-        # GÜNCELLENDİ: Rakam formatlaması eklendi (Türkçe format için)
         en_degerli_musteriler['Toplam Ciro (TL)'] = en_degerli_musteriler['Toplam Ciro (TL)'].apply(lambda x: f"₺{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True)
 
