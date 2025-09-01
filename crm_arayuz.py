@@ -144,13 +144,13 @@ def to_excel(df):
 def log_user_activity(user, activity, page_name="N/A"):
     log_file = 'loglar.csv'
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    ip_address = "N/A" 
+    ip_address = "N/A"
     with open(log_file, 'a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         if f.tell() == 0:
             writer.writerow(['Zaman Damgası', 'Kullanıcı Adı', 'IP Adresi', 'Sayfa Adı', 'Aktivite'])
         writer.writerow([timestamp, user, ip_address, page_name, activity])
-        
+
 # =======================================================================================
 # --- SAYFA FONKSİYONLARI ---
 # =======================================================================================
@@ -165,108 +165,50 @@ def page_genel_bakis(satis_df, stok_df, solen_borcu_degeri):
         with col2: st.metric("Toplam Stok Değeri (Brüt)", f"{toplam_stok_degeri:,.2f} TL")
         with col3: st.metric("Şölen'e Olan Borç", f"{solen_borcu_degeri:,.2f} TL")
         st.markdown("---")
-        
-        # ==================================================================
-        # GÜNCELLENEN BÖLÜM BAŞLANGICI
-        # ==================================================================
+
         st.subheader("Vadesi Geçmiş Alacak Özeti (Tüm Temsilciler)")
         gecikmis_df_genel = satis_df[(satis_df['Gün'] > 0) & (satis_df['Kalan Tutar Total'] > 0)]
         gun_1_35_genel = gecikmis_df_genel[(gecikmis_df_genel['Gün'] > 0) & (gecikmis_df_genel['Gün'] <= 35)]['Kalan Tutar Total'].sum()
         ustu_35_gun_genel = gecikmis_df_genel[gecikmis_df_genel['Gün'] > 35]['Kalan Tutar Total'].sum()
         ustu_45_gun_genel = gecikmis_df_genel[gecikmis_df_genel['Gün'] > 45]['Kalan Tutar Total'].sum()
         ustu_60_gun_genel = gecikmis_df_genel[gecikmis_df_genel['Gün'] > 60]['Kalan Tutar Total'].sum()
-
-        # Rakamları formatlayalım
         gun_1_35_str = f"{gun_1_35_genel:,.2f} TL"
         ustu_35_gun_str = f"{ustu_35_gun_genel:,.2f} TL"
         ustu_45_gun_str = f"{ustu_45_gun_genel:,.2f} TL"
         ustu_60_gun_str = f"{ustu_60_gun_genel:,.2f} TL"
 
-        # Kartlar için özel CSS ve HTML yapısı
         st.markdown(f"""
         <style>
-            .kpi-container {{
-                display: flex;
-                gap: 15px;
-                align-items: stretch;
-            }}
-            .main-kpi-box {{
-                flex: 2;
-                background-color: #ffffff;
-                border: 1px solid #e0e0e0;
-                border-radius: 12px;
-                padding: 15px;
-                display: flex;
-                align-items: center;
-                justify-content: space-around;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-            }}
-            .kpi-card {{
-                flex: 1;
-                color: white;
-                border-radius: 10px;
-                padding: 20px;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                text-align: center;
-                min-height: 140px;
-            }}
+            .kpi-container {{ display: flex; gap: 15px; align-items: stretch; }}
+            .main-kpi-box {{ flex: 2; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-around; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }}
+            .kpi-card {{ flex: 1; color: white; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; justify-content: center; text-align: center; min-height: 140px; }}
             .kpi-card.green {{ background-color: #28a745; }}
             .kpi-card.yellow {{ background-color: #ffc107; color: #333; }}
             .kpi-card.orange {{ background-color: #fd7e14; }}
             .kpi-card.red {{ background-color: #dc3545; }}
-            .kpi-title {{ 
-                font-size: 16px; 
-                font-weight: 600; 
-                margin-bottom: 10px; 
-            }}
-            .kpi-value {{ 
-                font-size: 26px; 
-                font-weight: bold; 
-            }}
-            .chain-icon {{
-                font-size: 32px;
-                color: #4a4a4a;
-                padding: 0 10px;
-                align-self: center;
-            }}
+            .kpi-title {{ font-size: 16px; font-weight: 600; margin-bottom: 10px; }}
+            .kpi-value {{ font-size: 26px; font-weight: bold; }}
+            .chain-icon {{ font-size: 32px; color: #4a4a4a; padding: 0 10px; align-self: center; }}
         </style>
-        
         <div class="kpi-container">
             <div class="main-kpi-box">
-                <div class="kpi-card green">
-                    <div class="kpi-title">1-35 Gün Arası Alacak</div>
-                    <div class="kpi-value">{gun_1_35_str}</div>
-                </div>
+                <div class="kpi-card green"><div class="kpi-title">1-35 Gün Arası Alacak</div><div class="kpi-value">{gun_1_35_str}</div></div>
                 <div class="chain-icon">🔗</div>
-                <div class="kpi-card yellow">
-                    <div class="kpi-title">35+ Gün Gecikme</div>
-                    <div class="kpi-value">{ustu_35_gun_str}</div>
-                </div>
+                <div class="kpi-card yellow"><div class="kpi-title">35+ Gün Gecikme</div><div class="kpi-value">{ustu_35_gun_str}</div></div>
             </div>
-            <div class="kpi-card orange">
-                <div class="kpi-title">45+ Gün Gecikme</div>
-                <div class="kpi-value">{ustu_45_gun_str}</div>
-            </div>
-            <div class="kpi-card red">
-                <div class="kpi-title">60+ Gün Gecikme (Riskli)</div>
-                <div class="kpi-value">{ustu_60_gun_str}</div>
-            </div>
+            <div class="kpi-card orange"><div class="kpi-title">45+ Gün Gecikme</div><div class="kpi-value">{ustu_45_gun_str}</div></div>
+            <div class="kpi-card red"><div class="kpi-title">60+ Gün Gecikme (Riskli)</div><div class="kpi-value">{ustu_60_gun_str}</div></div>
         </div>
         """, unsafe_allow_html=True)
-        # ==================================================================
-        # GÜNCELLENEN BÖLÜM SONU
-        # ==================================================================
         
-        st.markdown("<br>", unsafe_allow_html=True) 
+        st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("---")
         st.subheader("Temsilci Bazında Müşteri Bakiyelerinin Dağılımı")
-        col1_chart, col2_table = st.columns([2, 1]) 
+        col1_chart, col2_table = st.columns([2, 1])
         with col1_chart:
             temsilci_bakiyeleri = satis_df[satis_df['Kalan Tutar Total'] > 0].groupby('ST')['Kalan Tutar Total'].sum().reset_index()
             temsilci_bakiyeleri.columns = ['Satış Temsilcisi', 'Toplam Bakiye']
-            temsilci_bakiyeleri['parent'] = "Toplam Bakiye" 
+            temsilci_bakiyeleri['parent'] = "Toplam Bakiye"
             fig = px.sunburst(temsilci_bakiyeleri, path=['parent', 'Satış Temsilcisi'], values='Toplam Bakiye', color='Toplam Bakiye', color_continuous_scale='YlOrRd', title="Temsilcilerin Toplam Bakiyedeki Payları")
             fig.update_traces(textinfo='label+percent parent', hovertemplate='<b>%{label}</b><br>Bakiye: ₺%{value:,.2f}<extra></extra>')
             fig.update_layout(margin=dict(t=50, l=25, r=25, b=25), height=500)
@@ -315,13 +257,12 @@ def page_tum_temsilciler(satis_df, satis_hedef_df):
         st.subheader("Müşteri Bakiye Dökümü")
         pozitif_bakiye_df = temsilci_df[temsilci_df['Kalan Tutar Total'] > 0]
         gosterilecek_tablo = pozitif_bakiye_df[['Müşteri', 'Kalan Tutar Total']].rename(columns={'Müşteri': 'Müşteri Adı', 'Kalan Tutar Total': 'Bakiye (TL)'}).sort_values(by='Bakiye (TL)', ascending=False)
-        
         gosterilecek_tablo['Bakiye (TL)'] = gosterilecek_tablo['Bakiye (TL)'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         st.dataframe(gosterilecek_tablo, use_container_width=True, hide_index=True)
 
 def page_stok(stok_df):
     st.title("📦 Stok Yönetimi ve Envanter Analizi")
-    if stok_df is None: 
+    if stok_df is None:
         st.warning("Stok verileri yüklenemedi.")
         return
     brut_tutar_sutunu = 'Brüt Tutar'; miktar_sutunu = 'Miktar'; urun_adi_sutunu = 'Ürün'; urun_kodu_sutunu = 'Ürün Kodu'; depo_adi_sutunu = 'Depo Adı'; fiyat_sutunu = 'Fiyat'
@@ -373,7 +314,7 @@ def page_stok(stok_df):
 
 def page_yaslandirma(satis_df):
     st.title("⏳ Borç Yaşlandırma Analizi")
-    if satis_df is None: 
+    if satis_df is None:
         st.warning("Satış verileri yüklenemedi.")
         return
     gun_sutunu = 'Gün'
@@ -420,7 +361,6 @@ def page_satis_hedef(final_df):
         total_row = final_df[final_df['Satış Temsilcisi'].str.strip() == 'TOPLAM']
         toplam_hedef = total_row['HEDEF'].sum()
         toplam_satis = total_row['SATIŞ'].sum()
-        
         st.subheader("Genel Performans Durumu")
         gauge_fig = go.Figure(go.Indicator(
             mode = "gauge+number+delta", value = toplam_satis,
@@ -485,7 +425,6 @@ def page_musteri_analizi(satis_df, ciro_df):
         top_n = st.slider("Listelenecek müşteri sayısı:", 5, 50, 10, step=5, key='degerli_slider')
         en_degerli_musteriler = ciro_df.groupby('Müşteri Ünvanı')['Brüt Fiyat'].sum().sort_values(ascending=False).head(top_n).reset_index()
         en_degerli_musteriler.rename(columns={'Müşteri Ünvanı': 'Müşteri Adı', 'Brüt Fiyat': 'Toplam Ciro (TL)'}, inplace=True)
-        
         en_degerli_musteriler['Toplam Ciro (TL)'] = en_degerli_musteriler['Toplam Ciro (TL)'].apply(lambda x: f"₺{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True)
 
@@ -525,7 +464,7 @@ def page_log_raporlari():
         st.warning("Henüz herhangi bir log kaydı bulunmamaktadır.")
     except Exception as e:
         st.error(f"Log raporları okunurken bir hata oluştu: {e}")
-        
+
 def page_senaryo_analizi(satis_df, stok_df, satis_hedef_df):
     st.title("♟️ Senaryo Analizi (What-If)")
     if satis_df is None or stok_df is None or satis_hedef_df is None or satis_hedef_df.empty:
@@ -602,6 +541,47 @@ def add_developer_credit():
     """, unsafe_allow_html=True)
 
 def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, ciro_df):
+    # --- YENİ EKLENEN GENEL STİLLER ---
+    st.markdown("""
+    <style>
+    /* --- Genel Metrik Kart Stili --- */
+    div[data-testid="stMetric"] {
+        background-color: #F7F7F7 !important;
+        border: 2px solid #FDB022 !important;
+        border-radius: 10px !important;
+        padding: 20px !important;
+        transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+    }
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-5px) !important;
+        box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+    div[data-testid="stMetric"] label { color: #333333 !important; }
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #333333 !important; }
+    div[data-testid="stMetric"] div[data-testid="stMetricDelta"] { color: #333333 !important; }
+
+    /* --- Genel Seçim Kutusu (Selectbox) Stili --- */
+    div[data-testid="stSelectbox"] > label {
+        font-size: 16px !important;
+        color: #E6EAF5 !important;
+        margin-bottom: 8px !important;
+        font-weight: bold !important;
+    }
+    .stSelectbox div[data-baseweb="select"] > div {
+        background-color: #0E1528 !important; /* Koyu iç arkaplan */
+        border: 2px solid #FDB022 !important; /* Altın sarısı çerçeve */
+        color: #FDB022 !important; /* Seçili metin rengi */
+        font-weight: bold !important;
+        border-radius: 8px !important;
+        font-size: 18px !important;
+    }
+    .stSelectbox svg {
+        fill: #FDB022 !important; /* Ok ikonu rengi */
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     with st.sidebar:
         st.image("logo.jpeg", use_container_width=True)
         st.markdown("""<style>@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@700&display=swap');</style><div style="font-family: 'Exo 2', sans-serif; font-size: 28px; text-align: center; margin-bottom: 20px;"><span style="color: #FDB022;">ÖZLİDER TÜKETİM</span><span style="color: #E6EAF5;">- ŞÖLEN CRM</span></div>""", unsafe_allow_html=True)
@@ -613,15 +593,15 @@ def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, ciro_df):
             menu_options.append("Log Raporları")
             menu_icons.append('book')
             
-        secim = option_menu(menu_title=None, 
-                                options=menu_options, 
-                                icons=menu_icons, 
-                                menu_icon="cast", 
-                                default_index=0, 
-                                orientation="vertical", 
-                                styles={"container": {"padding": "0!important", "background-color": "transparent"}, 
-                                        "icon": {"color": "#FDB022", "font-size": "20px"}, 
-                                        "nav-link": {"font-size": "16px", "text-align": "left", "margin":"5px", "--hover-color": "#111A33"}, 
+        secim = option_menu(menu_title=None,
+                                options=menu_options,
+                                icons=menu_icons,
+                                menu_icon="cast",
+                                default_index=0,
+                                orientation="vertical",
+                                styles={"container": {"padding": "0!important", "background-color": "transparent"},
+                                        "icon": {"color": "#FDB022", "font-size": "20px"},
+                                        "nav-link": {"font-size": "16px", "text-align": "left", "margin":"5px", "--hover-color": "#111A33"},
                                         "nav-link-selected": {"background-color": "#3B2F8E"},})
 
     if 'last_page' not in st.session_state or st.session_state['last_page'] != secim:
@@ -654,32 +634,10 @@ def main_app(satis_df, stok_df, satis_hedef_df, solen_borcu_degeri, ciro_df):
 def login_page():
     st.markdown("""
         <style>
-            .stApp {
-                background-color: transparent !important;
-            }
-            .login-container {
-                padding: 40px;
-                border-radius: 10px;
-                background-color: rgba(17, 26, 51, 0.8);
-                text-align: center;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-                margin: auto;
-                width: fit-content;
-            }
-            .stTextInput>div>div>input {
-                color: #FDB022;
-                background-color: #0E1528;
-                border: 2px solid #3B2F8E;
-                border-radius: 5px;
-                box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.1);
-            }
-            .stButton>button {
-                color: #111A33;
-                background-color: #FDB022;
-                border-radius: 5px;
-                font-weight: bold;
-                box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
-            }
+            .stApp { background-color: transparent !important; }
+            .login-container { padding: 40px; border-radius: 10px; background-color: rgba(17, 26, 51, 0.8); text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin: auto; width: fit-content; }
+            .stTextInput>div>div>input { color: #FDB022; background-color: #0E1528; border: 2px solid #3B2F8E; border-radius: 5px; box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 5px rgba(255,255,255,0.1); }
+            .stButton>button { color: #111A33; background-color: #FDB022; border-radius: 5px; font-weight: bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); }
         </style>
     """, unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
