@@ -733,12 +733,14 @@ def page_senaryo_analizi(satis_df, stok_df, satis_hedef_df):
     if satis_df is None or stok_df is None or satis_hedef_df is None or satis_hedef_df.empty:
         st.warning("Bu modülün çalışması için `rapor.xls`, `stok.xls` ve `satis-hedef.xlsx` dosyalarının yüklenmiş olması gerekmektedir.")
         return
+
     try:
         total_row = satis_hedef_df[satis_hedef_df['Satış Temsilcisi'].str.strip() == 'TOPLAM']
         mevcut_toplam_satis = total_row['SATIŞ'].sum()
     except Exception:
         st.error("`satis-hedef.xlsx` dosyasındaki TOPLAM satırları okunamadı. Lütfen dosya formatını kontrol edin.")
         return
+
     mevcut_toplam_bakiye = satis_df['Kalan Tutar Total'].sum()
     vadesi_gecmis_df = satis_df[(satis_df['Gün'] > 0) & (satis_df['Kalan Tutar Total'] > 0)]
     toplam_vadesi_gecmis = vadesi_gecmis_df['Kalan Tutar Total'].sum()
@@ -755,9 +757,14 @@ def page_senaryo_analizi(satis_df, stok_df, satis_hedef_df):
         satis_fark = simulasyon_satis - mevcut_toplam_satis
         tahsil_edilen_tutar = toplam_vadesi_gecmis * (tahsilat_yuzde / 100)
         simulasyon_bakiye = mevcut_toplam_bakiye - tahsil_edilen_tutar
-        kpi1, kpi2, kpi3, kpi4 = st.columns(2)
+        
+        # --- HATA DÜZELTİLDİ ---
+        # Her metrik çifti için ayrı kolonlar oluşturuldu.
+        kpi1, kpi2 = st.columns(2)
         kpi1.metric("Mevcut Ciro", f"₺{mevcut_toplam_satis:,.0f}")
         kpi2.metric("Simülasyon Sonrası Ciro", f"₺{simulasyon_satis:,.0f}", delta=f"₺{satis_fark:,.0f}")
+        
+        kpi3, kpi4 = st.columns(2)
         kpi3.metric("Mevcut Toplam Bakiye", f"₺{mevcut_toplam_bakiye:,.0f}")
         kpi4.metric("Simülasyon Sonrası Bakiye", f"₺{simulasyon_bakiye:,.0f}", delta=f"-₺{tahsil_edilen_tutar:,.0f}", delta_color="inverse")
     
@@ -774,10 +781,16 @@ def page_senaryo_analizi(satis_df, stok_df, satis_hedef_df):
         iskontolu_satis = simulasyon_satis * (1 - iskonto_orani / 100)
         toplam_maliyet = iskontolu_satis * (maliyet_orani / 100)
         brut_kar = iskontolu_satis - toplam_maliyet
-        kpi5, kpi6, kpi7, kpi8, kpi9 = st.columns(2)
+        
+        # --- HATA DÜZELTİLDİ ---
+        # Her metrik çifti/üçlüsü için ayrı kolonlar oluşturuldu.
+        kpi5, kpi6 = st.columns(2)
         kpi5.metric("Mevcut Stok Değeri", f"₺{mevcut_stok_degeri:,.0f}")
         kpi6.metric("Zam Sonrası Stok Değeri", f"₺{simulasyon_stok_degeri:,.0f}", delta=f"₺{stok_deger_artisi:,.0f}")
-        st.markdown("")
+        
+        st.markdown("") # Boşluk için
+        
+        kpi7, kpi8, kpi9 = st.columns(3)
         kpi7.metric("İskontolu Ciro", f"₺{iskontolu_satis:,.0f}")
         kpi8.metric("Toplam Maliyet", f"₺{toplam_maliyet:,.0f}")
         kpi9.metric("Brüt Kâr", f"₺{brut_kar:,.0f}")
