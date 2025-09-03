@@ -6,8 +6,8 @@ import io
 import csv
 import plotly.graph_objects as go
 import plotly.express as px
-import requests # Harita için eklendi
-import json     # Harita için eklendi
+import requests
+import json
 
 # --- Sayfa Ayarları ---
 st.set_page_config(page_title="Öz lider CRM", page_icon="👑", layout="wide")
@@ -31,13 +31,10 @@ USER_CREDENTIALS = {
 
 # --- İsimleri Normalleştirme Fonksiyonu ---
 def normalize_turkish_names(name):
-    """
-    Türkçe karakterleri ve boşlukları temizleyerek isimleri normalleştirir.
-    """
     if pd.isna(name):
         return ""
     name = str(name).strip().lower()
-    name = name.replace('i̇', 'i').replace('i', 'i').replace('ş', 's').replace('ç', 'c').replace('ğ', 'g').replace('ö', 'o').replace('ü', 'u').replace('ı', 'i')
+    name = name.replace('i̇', 'i').replace('ı', 'i').replace('ş', 's').replace('ç', 'c').replace('ğ', 'g').replace('ö', 'o').replace('ü', 'u')
     name = name.replace('kalyuncu', 'kalyoncu')
     return name
 
@@ -87,16 +84,13 @@ def solen_borc_excel_oku(dosya_yolu):
             return float(rakam_str)
     except Exception:
         return 0.0
-        
-# YENİ EKLENDİ - Harita için ilçe verisini yükleme fonksiyonu
+
 @st.cache_data
 def adana_ilce_veri_yukle(dosya_yolu):
     try:
         df = pd.read_excel(dosya_yolu)
         df.columns = df.columns.str.strip()
-        # Türkçe karakter sorunlarını önlemek için ilçe isimlerini büyük harfe çevirelim
         if 'İlçe' in df.columns:
-            # DÜZELTME: .upper() fonksiyonundan 'tr' parametresi kaldırıldı.
             df['İlçe'] = df['İlçe'].str.upper()
         return df
     except FileNotFoundError:
@@ -107,7 +101,6 @@ def adana_ilce_veri_yukle(dosya_yolu):
 
 @st.cache_data
 def parse_satis_hedef_excel_robust(df_raw):
-    """satis-hedef.xlsx'teki tüm tabloları ve grupları okuyup tek bir DataFrame'e çevirir."""
     if df_raw is None:
         return pd.DataFrame()
     try:
@@ -310,10 +303,10 @@ def page_stok(stok_df):
     gosterilecek_nihai_df = gosterilecek_nihai_df.sort_values(by=urun_adi_sutunu, ascending=True)
     if is_aggregated:
         gosterilecek_sutunlar = [urun_kodu_sutunu, urun_adi_sutunu, miktar_sutunu, fiyat_sutunu, 'Brüt_Tutar']
-        format_sozlugu = {'Brüt_Tutar': '{{:,.2f}} TL', fiyat_sutunu: '{{:,.2f}} TL'}
+        format_sozlugu = {'Brüt_Tutar': '{:,.2f} TL', fiyat_sutunu: '{:,.2f} TL'}
     else:
         gosterilecek_sutunlar = [depo_adi_sutunu, urun_kodu_sutunu, urun_adi_sutunu, miktar_sutunu, fiyat_sutunu, brut_tutar_sutunu]
-        format_sozlugu = {{brut_tutar_sutunu: '{{:,.2f}} TL', fiyat_sutunu: '{{:,.2f}} TL'}}
+        format_sozlugu = {brut_tutar_sutunu: '{:,.2f} TL', fiyat_sutunu: '{:,.2f} TL'}
     st.dataframe(gosterilecek_nihai_df[gosterilecek_sutunlar].style.apply(highlight_critical, axis=1).format(format_sozlugu), use_container_width=True, hide_index=True)
 def page_yaslandirma(satis_df):
     st.title("⏳ Borç Yaşlandırma Analizi")
@@ -415,133 +408,88 @@ def page_hizmet_faturalari():
     st.warning("Bu sayfa şu anda yapım aşamasındadır.")
 
 # ==========================================================================================
-# MÜŞTERİ ANALİZİ SAYFASI - NİHAİ GÜNCELLEME: EKSİK İLÇELER, HARİTA STİLİ VE İLÇE SEÇİM KUTUSU
+# MÜŞTERİ ANALİZİ SAYFASI - NİHAİ GÜNCELLEME v4: HARİTA VERİSİ KODA GÖMÜLDÜ (KESİN ÇÖZÜM)
 # ==========================================================================================
 def page_musteri_analizi(satis_df, ilce_df):
     st.title("👥 Müşteri Analizi")
     st.markdown("Değerli, sadık veya hareketsiz müşterilerinizi keşfedin ve bölgesel performansı analiz edin.")
     st.markdown("---")
 
-    # --- BÖLGESEL YOĞUNLUK HARİTASI ---
-    st.subheader("🗺️ Adana İlçe Bazında Performans Haritası")
+    aktif_ilceler = ["SEYHAN", "ÇUKUROVA", "YÜREĞİR", "SARIÇAM", "KARAİSALI"]
+    st.subheader("🗺️ Adana Merkez İlçe Performans Haritası")
     if ilce_df is None:
         st.warning("Haritayı görüntülemek için lütfen `adana_ilce_ciro.xlsx` dosyasını ana klasöre ekleyin.")
     elif ilce_df.empty or 'İlçe' not in ilce_df.columns:
         st.error("`adana_ilce_ciro.xlsx` dosyasında 'İlçe' sütunu bulunamadı veya dosya formatı hatalı.")
     else:
+        ilce_df_aktif = ilce_df[ilce_df['İlçe'].isin(aktif_ilceler)].copy()
+        
+        if ilce_df_aktif.empty:
+            st.warning(f"Veri setinde belirtilen aktif ilçelerden ({', '.join(aktif_ilceler)}) herhangi birine ait kayıt bulunamadı.")
+            return
+
+        ciro_by_ilce = ilce_df_aktif.groupby('İlçe')['Brüt Fiyat'].sum().reset_index()
+        musteri_by_ilce = ilce_df_aktif.groupby('İlçe')['Müşteri Ünvanı'].nunique().reset_index()
+        musteri_by_ilce.rename(columns={'Müşteri Ünvanı': 'Müşteri Sayısı'}, inplace=True)
+        
+        gosterilecek_veri = pd.merge(ciro_by_ilce, musteri_by_ilce, on='İlçe')
+
         col1, col2 = st.columns([3, 1])
         with col2:
-            st.write("#### Harita Görünümü")
-            secim = st.selectbox(
-                "Görüntülenecek Veri:",
-                ["Toplam Ciro", "Müşteri Sayısı"],
-                key="harita_veri_secim" # Key güncellendi
+            st.write("#### Genel Bakış")
+            en_iyi_ilce = gosterilecek_veri.sort_values(by='Brüt Fiyat', ascending=False).iloc[0]
+            st.metric(
+                label="En Yüksek Cirolu İlçe",
+                value=en_iyi_ilce['İlçe'],
+                help=f"Değer: {en_iyi_ilce['Brüt Fiyat']:,.0f} TL"
             )
-            
-            if secim == "Toplam Ciro":
-                gosterilecek_veri = ilce_df.groupby("İlçe")["Brüt Fiyat"].sum().reset_index()
-                renk_skalasi = "Greens"
-                hover_adi = "Toplam Ciro"
-            elif secim == "Müşteri Sayısı":
-                gosterilecek_veri = ilce_df.groupby("İlçe")["Müşteri Ünvanı"].nunique().reset_index()
-                gosterilecek_veri.rename(columns={"Müşteri Ünvanı": "Müşteri Sayısı"}, inplace=True)
-                renk_skalasi = "Blues"
-                hover_adi = "Müşteri Sayısı"
-
-            if not gosterilecek_veri.empty:
-                gosterilecek_veri = gosterilecek_veri.sort_values(by=gosterilecek_veri.columns[1], ascending=False)
-                en_iyi_ilce = gosterilecek_veri.iloc[0]
-                st.metric(
-                    label=f"En Yüksek {hover_adi} Olan İlçe",
-                    value=en_iyi_ilce['İlçe'],
-                    help=f"Değer: {en_iyi_ilce[gosterilecek_veri.columns[1]]:,.0f}"
-                )
-            
-            st.markdown("---")
-            st.write("#### Detaylı İlçe Analizi")
-            
-            # --- YENİ EKLENEN İLÇE SEÇİM KUTUSU ---
-            tum_ilceler = ['Tüm Adana'] + sorted(ilce_df['İlçe'].unique().tolist())
-            secilen_ilce_detay = st.selectbox(
-                "Detaylarını görmek istediğiniz ilçeyi seçin:",
-                tum_ilceler,
-                key="ilce_detay_secim"
-            )
-
-            if secilen_ilce_detay and secilen_ilce_detay != 'Tüm Adana':
-                filtreli_ilce_df = ilce_df[ilce_df['İlçe'] == secilen_ilce_detay]
-                toplam_ciro_ilce = filtreli_ilce_df['Brüt Fiyat'].sum()
-                musteri_sayisi_ilce = filtreli_ilce_df['Müşteri Ünvanı'].nunique()
-
-                st.markdown(f"**{secilen_ilce_detay} İçin Detaylar:**")
-                st.metric("Toplam Ciro", f"₺{toplam_ciro_ilce:,.2f}")
-                st.metric("Müşteri Sayısı", f"{musteri_sayisi_ilce:,.0f}")
-            elif secilen_ilce_detay == 'Tüm Adana':
-                 st.info("Yukarıdaki harita ve genel metrikler 'Tüm Adana' için geçerlidir.")
-
 
         with col1:
             try:
-                # GeoJSON verisi güncellendi ve tüm Adana ilçelerini içeriyor
-                adana_geojson = {
-                  "type": "FeatureCollection",
-                  "features": [
-                    {"type": "Feature", "properties": { "name": "ALADAĞ" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.5036, 37.5241], [35.4190, 37.4771], [35.3338, 37.5451], [35.3719, 37.6430], [35.3352, 37.7033], [35.4050, 37.7502], [35.4800, 37.7011], [35.5269, 37.6066], [35.5036, 37.5241] ] ] } },
-                    {"type": "Feature", "properties": { "name": "CEYHAN" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.9188, 36.8488], [35.8080, 36.8794], [35.7725, 36.9838], [35.8458, 37.0505], [35.9680, 37.0422], [36.0391, 37.1008], [36.0880, 37.0116], [36.1666, 36.9388], [35.9980, 36.8850], [35.9188, 36.8488] ] ] } },
-                    {"type": "Feature", "properties": { "name": "ÇUKUROVA" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.3236, 37.0041], [35.2119, 37.0308], [35.2513, 37.0902], [35.3619, 37.0705], [35.3236, 37.0041] ] ] } },
-                    {"type": "Feature", "properties": { "name": "FEKE" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.9402, 37.7205], [35.8211, 37.7788], [35.8580, 37.9011], [35.9991, 37.8894], [36.0494, 37.8105], [35.9402, 37.7205] ] ] } },
-                    {"type": "Feature", "properties": { "name": "İMAMOĞLU" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.7316, 37.1994], [35.6133, 37.2400], [35.5891, 37.3111], [35.7002, 37.3402], [35.7891, 37.2794], [35.7316, 37.1994] ] ] } },
-                    {"type": "Feature", "properties": { "name": "KARAİSALI" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.1583, 37.1683], [35.0480, 37.2211], [35.0880, 37.3308], [35.2013, 37.3011], [35.2413, 37.2280], [35.1583, 37.1683] ] ] } },
-                    {"type": "Feature", "properties": { "name": "KARATAŞ" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.5394, 36.5611], [35.3719, 36.5511], [35.2816, 36.6897], [35.4091, 36.7816], [35.5813, 36.7113], [35.5394, 36.5611] ] ] } },
-                    {"type": "Feature", "properties": { "name": "KOZAN" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.9288, 37.3811], [35.7725, 37.4000], [35.6983, 37.5211], [35.8016, 37.6011], [35.9180, 37.5400], [35.9288, 37.3811] ] ] } },
-                    {"type": "Feature", "properties": { "name": "POZANTI" }, "geometry": { "type": "Polygon", "coordinates": [ [ [34.9016, 37.2905], [34.8211, 37.4788], [34.9980, 37.5794], [35.0811, 37.4300], [34.9016, 37.2905] ] ] } },
-                    {"type": "Feature", "properties": { "name": "SAİMBEYLİ" }, "geometry": { "type": "Polygon", "coordinates": [ [ [36.1511, 37.8813], [35.9991, 37.9483], [35.9400, 38.0805], [36.0880, 38.1000], [36.2280, 37.9894], [36.1511, 37.8813] ] ] } },
-                    {"type": "Feature", "properties": { "name": "SARIÇAM" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.5816, 37.0183], [35.4419, 37.0500], [35.4880, 37.1813], [35.6319, 37.1500], [35.5816, 37.0183] ] ] } },
-                    {"type": "Feature", "properties": { "name": "SEYHAN" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.3236, 37.0041], [35.3619, 37.0705], [35.2513, 37.0902], [35.1583, 36.9511], [35.3236, 37.0041] ] ] } },
-                    {"type": "Feature", "properties": { "name": "TUFANBEYLİ" }, "geometry": { "type": "Polygon", "coordinates": [ [ [36.3111, 38.1811], [36.1411, 38.2513], [36.2080, 38.3811], [36.3811, 38.3308], [36.3111, 38.1811] ] ] } },
-                    {"type": "Feature", "properties": { "name": "YUMURTALIK" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.8402, 36.6500], [35.7080, 36.6811], [35.6980, 36.8300], [35.8913, 36.8000], [35.8402, 36.6500] ] ] } },
-                    {"type": "Feature", "properties": { "name": "YÜREĞİR" }, "geometry": { "type": "Polygon", "coordinates": [ [ [35.4419, 37.0500], [35.5816, 37.0183], [35.5394, 36.8194], [35.3719, 36.8794], [35.4419, 37.0500] ] ] } }
-                  ]
+                # --- DOĞRULANMIŞ HARİTA VERİSİ DOĞRUDAN KODA GÖMÜLDÜ ---
+                aktif_geojson = {
+                    "type": "FeatureCollection",
+                    "features": [
+                        {"type": "Feature", "properties": {"name": "SEYHAN"}, "geometry": {"type": "Polygon", "coordinates": [[[35.3228, 37.0049], [35.3094, 36.9852], [35.2842, 36.9806], [35.2481, 36.9587], [35.2158, 36.9554], [35.1578, 36.9525], [35.1611, 37.0142], [35.2017, 37.0317], [35.2494, 37.0863], [35.2789, 37.0782], [35.3117, 37.0818], [35.3403, 37.0665], [35.3228, 37.0049]]]}},
+                        {"type": "Feature", "properties": {"name": "YÜREĞİR"}, "geometry": {"type": "Polygon", "coordinates": [[[35.3411, 37.0004], [35.3722, 36.8788], [35.4381, 36.8742], [35.4878, 36.8407], [35.5397, 36.8197], [35.5683, 36.9632], [35.5808, 37.0194], [35.4411, 37.0504], [35.3411, 37.0004]]]}},
+                        {"type": "Feature", "properties": {"name": "SARIÇAM"}, "geometry": {"type": "Polygon", "coordinates": [[[35.4411, 37.0504], [35.5808, 37.0194], [35.6175, 37.108], [35.6314, 37.1504], [35.5783, 37.1707], [35.4883, 37.1821], [35.4411, 37.0504]]]}},
+                        {"type": "Feature", "properties": {"name": "ÇUKUROVA"}, "geometry": {"type": "Polygon", "coordinates": [[[35.2494, 37.0863], [35.2017, 37.0317], [35.2114, 37.0304], [35.2483, 37.057], [35.3033, 37.0514], [35.3403, 37.0665], [35.3117, 37.0818], [35.2789, 37.0782], [35.2494, 37.0863]]]}},
+                        {"type": "Feature", "properties": {"name": "KARAİSALI"}, "geometry": {"type": "Polygon", "coordinates": [[[35.0480, 37.2211], [35.1583, 37.1683], [35.2413, 37.2280], [35.2013, 37.3011], [35.0880, 37.3308], [35.0480, 37.2211]]]}}
+                    ]
                 }
                 
-                # GeoJSON'daki ilçe isimlerini büyük harfe çevir
-                for feature in adana_geojson["features"]:
-                    feature["properties"]["name"] = feature["properties"]["name"].upper()
-
                 fig = px.choropleth_mapbox(
                     gosterilecek_veri,
-                    geojson=adana_geojson,
+                    geojson=aktif_geojson,
                     locations='İlçe',
                     featureidkey="properties.name",
-                    color=gosterilecek_veri.columns[1],
-                    color_continuous_scale=renk_skalasi,
-                    # Harita stilini ve başlangıç görünümünü daha iyi hale getirme
-                    mapbox_style="carto-positron", # Daha modern ve temiz bir stil
-                    zoom=9.3, # Daha yakın başlangıç yakınlaştırma
-                    center={"lat": 37.10, "lon": 35.60}, # Adana merkezine daha yakın bir konum
+                    color='Brüt Fiyat',
+                    color_continuous_scale="Plasma",
+                    mapbox_style="carto-darkmatter",
+                    zoom=9.5,
+                    center={"lat": 37.05, "lon": 35.35},
                     opacity=0.8,
-                    labels={gosterilecek_veri.columns[1]: hover_adi}
+                    hover_name='İlçe',
+                    hover_data={
+                        'İlçe': False,
+                        'Brüt Fiyat': ':.2f',
+                        'Müşteri Sayısı': True
+                    },
+                    labels={'Brüt Fiyat': 'Toplam Ciro'}
                 )
                 fig.update_layout(
                     margin={"r":0,"t":0,"l":0,"b":0},
-                    mapbox_accesstoken=None, # Public harita stilleri için token gerekmez
-                    # Harita çerçevelerini daha belirgin yapalım
-                    mapbox_layers=[
-                        {
-                            "sourcetype": "geojson",
-                            "source": adana_geojson,
-                            "type": "line",
-                            "color": "black", # İlçe sınır çizgilerinin rengi
-                            "line": {"width": 1.5} # İlçe sınır çizgilerinin kalınlığı
-                        }
-                    ]
+                    hoverlabel=dict(
+                        bgcolor="black",
+                        font_size=16,
+                        font_family="Rockwell"
+                    )
                 )
                 st.plotly_chart(fig, use_container_width=True)
             except Exception as e:
-                st.error(f"Harita oluşturulurken beklenmedik bir hata oluştu. Lütfen Excel dosyanızdaki 'İlçe' isimlerinin doğru olduğundan ve Türkçe karakterlerin eşleştiğinden emin olun. Hata: {e}")
+                st.error(f"Harita oluşturulurken beklenmedik bir hata oluştu. Hata: {e}")
 
     st.markdown("---")
-
     st.subheader("🥇 En Değerli Müşteriler (Yıllık Ciroya Göre)")
     if ilce_df is None or ilce_df.empty:
         st.warning("En değerli müşterileri görüntülemek için `adana_ilce_ciro.xlsx` dosyası gereklidir.")
@@ -575,146 +523,6 @@ def page_musteri_analizi(satis_df, ilce_df):
             st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
     else:
         st.warning("Sadık ve uyuyan müşterileri analiz etmek için `rapor.xls` dosyası gereklidir.")
-
-    st.subheader("🥇 En Değerli Müşteriler (Yıllık Ciroya Göre)")
-    if ilce_df is None or ilce_df.empty:
-        st.warning("En değerli müşterileri görüntülemek için `adana_ilce_ciro.xlsx` dosyası gereklidir.")
-    else:
-        top_n = st.slider("Listelenecek müşteri sayısı:", 5, 50, 10, step=5, key='degerli_slider')
-        en_degerli_musteriler = ilce_df.groupby('Müşteri Ünvanı')['Brüt Fiyat'].sum().sort_values(ascending=False).head(top_n).reset_index()
-        en_degerli_musteriler.rename(columns={'Müşteri Ünvanı': 'Müşteri Adı', 'Brüt Fiyat': 'Toplam Ciro (TL)'}, inplace=True)
-        en_degerli_musteriler['Toplam Ciro (TL)'] = en_degerli_musteriler['Toplam Ciro (TL)'].apply(lambda x: f"₺{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True)
-
-    if satis_df is not None:
-        st.markdown("---")
-        st.subheader("❤️ Sadık Müşteriler (İşlem Sayısı)")
-        top_n_sadik = st.slider("Listelenecek sadık müşteri sayısı:", 5, 50, 10, step=5, key='sadik_slider')
-        sadik_musteriler = satis_df['Müşteri'].value_counts().head(top_n_sadik).reset_index()
-        sadik_musteriler.columns = ['Müşteri Adı', 'Toplam İşlem Sayısı']
-        st.dataframe(sadik_musteriler, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-        st.subheader("😴 'Uyuyan' Müşteriler (Son İşlem Tarihine Göre)")
-        son_islem_gunleri = satis_df.groupby('Müşteri')['Gün'].max().reset_index()
-        son_islem_gunleri.columns = ['Müşteri', 'Gecikme Günü']
-        bugunun_tarihi = datetime.today().date()
-        son_islem_gunleri['Son İşlem Tarihi'] = son_islem_gunleri['Gecikme Günü'].apply(lambda x: bugunun_tarihi - pd.Timedelta(days=x) if pd.notna(x) else None)
-        gecikme_gunu = st.slider("İşlem görmeyen minimum gün sayısı:", 30, 180, 60)
-        uyuyan_musteriler = son_islem_gunleri[son_islem_gunleri['Gecikme Günü'] >= gecikme_gunu].sort_values(by='Gecikme Günü', ascending=False)
-        if not uyuyan_musteriler.empty:
-            st.info(f"Son işlemi **{gecikme_gunu} günden** eski olan müşteriler listeleniyor.")
-            st.dataframe(uyuyan_musteriler[['Müşteri', 'Gecikme Günü', 'Son İşlem Tarihi']], use_container_width=True, hide_index=True, column_config={"Gecikme Günü": "Gecikme Günü", "Son İşlem Tarihi": st.column_config.DateColumn(format="YYYY-MM-DD")})
-        else:
-            st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
-    else:
-        st.warning("Sadık ve uyuyan müşterileri analiz etmek için `rapor.xls` dosyası gereklidir.")
-    st.markdown("---")
-
-    st.subheader("🥇 En Değerli Müşteriler (Yıllık Ciroya Göre)")
-    if ilce_df is None or ilce_df.empty:
-        st.warning("En değerli müşterileri görüntülemek için `adana_ilce_ciro.xlsx` dosyası gereklidir.")
-    else:
-        top_n = st.slider("Listelenecek müşteri sayısı:", 5, 50, 10, step=5, key='degerli_slider')
-        en_degerli_musteriler = ilce_df.groupby('Müşteri Ünvanı')['Brüt Fiyat'].sum().sort_values(ascending=False).head(top_n).reset_index()
-        en_degerli_musteriler.rename(columns={'Müşteri Ünvanı': 'Müşteri Adı', 'Brüt Fiyat': 'Toplam Ciro (TL)'}, inplace=True)
-        en_degerli_musteriler['Toplam Ciro (TL)'] = en_degerli_musteriler['Toplam Ciro (TL)'].apply(lambda x: f"₺{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True)
-
-    if satis_df is not None:
-        st.markdown("---")
-        st.subheader("❤️ Sadık Müşteriler (İşlem Sayısı)")
-        top_n_sadik = st.slider("Listelenecek sadık müşteri sayısı:", 5, 50, 10, step=5, key='sadik_slider')
-        sadik_musteriler = satis_df['Müşteri'].value_counts().head(top_n_sadik).reset_index()
-        sadik_musteriler.columns = ['Müşteri Adı', 'Toplam İşlem Sayısı']
-        st.dataframe(sadik_musteriler, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-        st.subheader("😴 'Uyuyan' Müşteriler (Son İşlem Tarihine Göre)")
-        son_islem_gunleri = satis_df.groupby('Müşteri')['Gün'].max().reset_index()
-        son_islem_gunleri.columns = ['Müşteri', 'Gecikme Günü']
-        bugunun_tarihi = datetime.today().date()
-        son_islem_gunleri['Son İşlem Tarihi'] = son_islem_gunleri['Gecikme Günü'].apply(lambda x: bugunun_tarihi - pd.Timedelta(days=x) if pd.notna(x) else None)
-        gecikme_gunu = st.slider("İşlem görmeyen minimum gün sayısı:", 30, 180, 60)
-        uyuyan_musteriler = son_islem_gunleri[son_islem_gunleri['Gecikme Günü'] >= gecikme_gunu].sort_values(by='Gecikme Günü', ascending=False)
-        if not uyuyan_musteriler.empty:
-            st.info(f"Son işlemi **{gecikme_gunu} günden** eski olan müşteriler listeleniyor.")
-            st.dataframe(uyuyan_musteriler[['Müşteri', 'Gecikme Günü', 'Son İşlem Tarihi']], use_container_width=True, hide_index=True, column_config={"Gecikme Günü": "Gecikme Günü", "Son İşlem Tarihi": st.column_config.DateColumn(format="YYYY-MM-DD")})
-        else:
-            st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
-    else:
-        st.warning("Sadık ve uyuyan müşterileri analiz etmek için `rapor.xls` dosyası gereklidir.")
-    st.markdown("---")
-
-    st.subheader("🥇 En Değerli Müşteriler (Yıllık Ciroya Göre)")
-    if ilce_df is None or ilce_df.empty:
-        st.warning("En değerli müşterileri görüntülemek için `adana_ilce_ciro.xlsx` dosyası gereklidir.")
-    else:
-        top_n = st.slider("Listelenecek müşteri sayısı:", 5, 50, 10, step=5, key='degerli_slider')
-        en_degerli_musteriler = ilce_df.groupby('Müşteri Ünvanı')['Brüt Fiyat'].sum().sort_values(ascending=False).head(top_n).reset_index()
-        en_degerli_musteriler.rename(columns={'Müşteri Ünvanı': 'Müşteri Adı', 'Brüt Fiyat': 'Toplam Ciro (TL)'}, inplace=True)
-        en_degerli_musteriler['Toplam Ciro (TL)'] = en_degerli_musteriler['Toplam Ciro (TL)'].apply(lambda x: f"₺{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True)
-
-    if satis_df is not None:
-        st.markdown("---")
-        st.subheader("❤️ Sadık Müşteriler (İşlem Sayısı)")
-        top_n_sadik = st.slider("Listelenecek sadık müşteri sayısı:", 5, 50, 10, step=5, key='sadik_slider')
-        sadik_musteriler = satis_df['Müşteri'].value_counts().head(top_n_sadik).reset_index()
-        sadik_musteriler.columns = ['Müşteri Adı', 'Toplam İşlem Sayısı']
-        st.dataframe(sadik_musteriler, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-        st.subheader("😴 'Uyuyan' Müşteriler (Son İşlem Tarihine Göre)")
-        son_islem_gunleri = satis_df.groupby('Müşteri')['Gün'].max().reset_index()
-        son_islem_gunleri.columns = ['Müşteri', 'Gecikme Günü']
-        bugunun_tarihi = datetime.today().date()
-        son_islem_gunleri['Son İşlem Tarihi'] = son_islem_gunleri['Gecikme Günü'].apply(lambda x: bugunun_tarihi - pd.Timedelta(days=x) if pd.notna(x) else None)
-        gecikme_gunu = st.slider("İşlem görmeyen minimum gün sayısı:", 30, 180, 60)
-        uyuyan_musteriler = son_islem_gunleri[son_islem_gunleri['Gecikme Günü'] >= gecikme_gunu].sort_values(by='Gecikme Günü', ascending=False)
-        if not uyuyan_musteriler.empty:
-            st.info(f"Son işlemi **{gecikme_gunu} günden** eski olan müşteriler listeleniyor.")
-            st.dataframe(uyuyan_musteriler[['Müşteri', 'Gecikme Günü', 'Son İşlem Tarihi']], use_container_width=True, hide_index=True, column_config={"Gecikme Günü": "Gecikme Günü", "Son İşlem Tarihi": st.column_config.DateColumn(format="YYYY-MM-DD")})
-        else:
-            st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
-    else:
-        st.warning("Sadık ve uyuyan müşterileri analiz etmek için `rapor.xls` dosyası gereklidir.")
-    st.markdown("---")
-
-    st.subheader("🥇 En Değerli Müşteriler (Yıllık Ciroya Göre)")
-    if ilce_df is None or ilce_df.empty:
-        st.warning("En değerli müşterileri görüntülemek için `adana_ilce_ciro.xlsx` dosyası gereklidir.")
-    else:
-        top_n = st.slider("Listelenecek müşteri sayısı:", 5, 50, 10, step=5, key='degerli_slider')
-        en_degerli_musteriler = ilce_df.groupby('Müşteri Ünvanı')['Brüt Fiyat'].sum().sort_values(ascending=False).head(top_n).reset_index()
-        en_degerli_musteriler.rename(columns={'Müşteri Ünvanı': 'Müşteri Adı', 'Brüt Fiyat': 'Toplam Ciro (TL)'}, inplace=True)
-        en_degerli_musteriler['Toplam Ciro (TL)'] = en_degerli_musteriler['Toplam Ciro (TL)'].apply(lambda x: f"₺{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        st.dataframe(en_degerli_musteriler, use_container_width=True, hide_index=True)
-
-    if satis_df is not None:
-        st.markdown("---")
-        st.subheader("❤️ Sadık Müşteriler (İşlem Sayısı)")
-        top_n_sadik = st.slider("Listelenecek sadık müşteri sayısı:", 5, 50, 10, step=5, key='sadik_slider')
-        sadik_musteriler = satis_df['Müşteri'].value_counts().head(top_n_sadik).reset_index()
-        sadik_musteriler.columns = ['Müşteri Adı', 'Toplam İşlem Sayısı']
-        st.dataframe(sadik_musteriler, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-        st.subheader("😴 'Uyuyan' Müşteriler (Son İşlem Tarihine Göre)")
-        son_islem_gunleri = satis_df.groupby('Müşteri')['Gün'].max().reset_index()
-        son_islem_gunleri.columns = ['Müşteri', 'Gecikme Günü']
-        bugunun_tarihi = datetime.today().date()
-        son_islem_gunleri['Son İşlem Tarihi'] = son_islem_gunleri['Gecikme Günü'].apply(lambda x: bugunun_tarihi - pd.Timedelta(days=x) if pd.notna(x) else None)
-        gecikme_gunu = st.slider("İşlem görmeyen minimum gün sayısı:", 30, 180, 60)
-        uyuyan_musteriler = son_islem_gunleri[son_islem_gunleri['Gecikme Günü'] >= gecikme_gunu].sort_values(by='Gecikme Günü', ascending=False)
-        if not uyuyan_musteriler.empty:
-            st.info(f"Son işlemi **{gecikme_gunu} günden** eski olan müşteriler listeleniyor.")
-            st.dataframe(uyuyan_musteriler[['Müşteri', 'Gecikme Günü', 'Son İşlem Tarihi']], use_container_width=True, hide_index=True, column_config={"Gecikme Günü": "Gecikme Günü", "Son İşlem Tarihi": st.column_config.DateColumn(format="YYYY-MM-DD")})
-        else:
-            st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
-    else:
-        st.warning("Sadık ve uyuyan müşterileri analiz etmek için `rapor.xls` dosyası gereklidir.")
-
 def page_log_raporlari():
     st.title("🗒️ Kullanıcı Aktivite Logları")
     log_file = 'loglar.csv'
@@ -733,19 +541,16 @@ def page_senaryo_analizi(satis_df, stok_df, satis_hedef_df):
     if satis_df is None or stok_df is None or satis_hedef_df is None or satis_hedef_df.empty:
         st.warning("Bu modülün çalışması için `rapor.xls`, `stok.xls` ve `satis-hedef.xlsx` dosyalarının yüklenmiş olması gerekmektedir.")
         return
-
     try:
         total_row = satis_hedef_df[satis_hedef_df['Satış Temsilcisi'].str.strip() == 'TOPLAM']
         mevcut_toplam_satis = total_row['SATIŞ'].sum()
     except Exception:
         st.error("`satis-hedef.xlsx` dosyasındaki TOPLAM satırları okunamadı. Lütfen dosya formatını kontrol edin.")
         return
-
     mevcut_toplam_bakiye = satis_df['Kalan Tutar Total'].sum()
     vadesi_gecmis_df = satis_df[(satis_df['Gün'] > 0) & (satis_df['Kalan Tutar Total'] > 0)]
     toplam_vadesi_gecmis = vadesi_gecmis_df['Kalan Tutar Total'].sum()
     mevcut_stok_degeri = stok_df['Brüt Tutar'].sum()
-
     st.markdown("---")
     st.subheader("Genel Performans Simülasyonu")
     col1, col2 = st.columns([1, 2])
@@ -757,13 +562,9 @@ def page_senaryo_analizi(satis_df, stok_df, satis_hedef_df):
         satis_fark = simulasyon_satis - mevcut_toplam_satis
         tahsil_edilen_tutar = toplam_vadesi_gecmis * (tahsilat_yuzde / 100)
         simulasyon_bakiye = mevcut_toplam_bakiye - tahsil_edilen_tutar
-        
-        # --- HATA DÜZELTİLDİ ---
-        # Her metrik çifti için ayrı kolonlar oluşturuldu.
         kpi1, kpi2 = st.columns(2)
         kpi1.metric("Mevcut Ciro", f"₺{mevcut_toplam_satis:,.0f}")
         kpi2.metric("Simülasyon Sonrası Ciro", f"₺{simulasyon_satis:,.0f}", delta=f"₺{satis_fark:,.0f}")
-        
         kpi3, kpi4 = st.columns(2)
         kpi3.metric("Mevcut Toplam Bakiye", f"₺{mevcut_toplam_bakiye:,.0f}")
         kpi4.metric("Simülasyon Sonrası Bakiye", f"₺{simulasyon_bakiye:,.0f}", delta=f"-₺{tahsil_edilen_tutar:,.0f}", delta_color="inverse")
@@ -781,15 +582,10 @@ def page_senaryo_analizi(satis_df, stok_df, satis_hedef_df):
         iskontolu_satis = simulasyon_satis * (1 - iskonto_orani / 100)
         toplam_maliyet = iskontolu_satis * (maliyet_orani / 100)
         brut_kar = iskontolu_satis - toplam_maliyet
-        
-        # --- HATA DÜZELTİLDİ ---
-        # Her metrik çifti/üçlüsü için ayrı kolonlar oluşturuldu.
         kpi5, kpi6 = st.columns(2)
         kpi5.metric("Mevcut Stok Değeri", f"₺{mevcut_stok_degeri:,.0f}")
         kpi6.metric("Zam Sonrası Stok Değeri", f"₺{simulasyon_stok_degeri:,.0f}", delta=f"₺{stok_deger_artisi:,.0f}")
-        
-        st.markdown("") # Boşluk için
-        
+        st.markdown("")
         kpi7, kpi8, kpi9 = st.columns(3)
         kpi7.metric("İskontolu Ciro", f"₺{iskontolu_satis:,.0f}")
         kpi8.metric("Toplam Maliyet", f"₺{toplam_maliyet:,.0f}")
