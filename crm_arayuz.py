@@ -257,97 +257,6 @@ def page_tum_temsilciler(satis_df, satis_hedef_df):
         gosterilecek_tablo['Bakiye (TL)'] = gosterilecek_tablo['Bakiye (TL)'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         st.dataframe(gosterilecek_tablo, use_container_width=True, hide_index=True)
 
-def page_stok(stok_df):
-    st.title("📦 Stok Yönetimi ve Envanter Analizi")
-    if stok_df is None:
-        st.warning("Stok verileri yüklenemedi.")
-        return
-    brut_tutar_sutunu = 'Brüt Tutar'; miktar_sutunu = 'Miktar'; urun_adi_sutunu = 'Ürün'; urun_kodu_sutunu = 'Ürün Kodu'; depo_adi_sutunu = 'Depo Adı'; fiyat_sutunu = 'Fiyat'
-    gerekli_sutunlar = [brut_tutar_sutunu, miktar_sutunu, urun_adi_sutunu]
-    for sutun in gerekli_sutunlar:
-        if sutun not in stok_df.columns:
-            st.error(f"HATA: Stok Excel dosyasında '{sutun}' adında bir sütun bulunamadı!")
-            return
-    aktif_stok_df = stok_df[stok_df[miktar_sutunu] > 0].copy()
-    st.markdown("Depo seçimi yaparak envanteri filtreleyin veya tüm depolardaki ürünleri toplu olarak görün.")
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        depo_listesi = ['Tüm Depolar'] + sorted(aktif_stok_df[depo_adi_sutunu].unique())
-        secilen_depo = st.selectbox('Depo Seçin:', depo_listesi)
-    with col2:
-        sadece_kritikleri_goster = st.toggle('Sadece Kritik Seviyedeki Ürünleri Göster', value=False)
-    if secilen_depo == 'Tüm Depolar':
-        goruntulenecek_df = aktif_stok_df.groupby([urun_kodu_sutunu, urun_adi_sutunu, fiyat_sutunu]).agg(Miktar=(miktar_sutunu, 'sum'), Brüt_Tutar=(brut_tutar_sutunu, 'sum')).reset_index()
-        is_aggregated = True
-    else:
-        goruntulenecek_df = aktif_stok_df[aktif_stok_df[depo_adi_sutunu] == secilen_depo]
-        is_aggregated = False
-    st.markdown("---")
-    toplam_stok_degeri = goruntulenecek_df['Brüt_Tutar' if is_aggregated else brut_tutar_sutunu].sum()
-    kritik_seviye_degeri = 40
-    kritik_seviyedeki_urunler_df = goruntulenecek_df[goruntulenecek_df[miktar_sutunu] < kritik_seviye_degeri]
-    kpi1, kpi2, kpi3 = st.columns(3)
-    kpi1.metric("Toplam Stok Değeri (Brüt)", f"{toplam_stok_degeri:,.2f} TL")
-    kpi2.metric("Stoktaki Ürün Çeşidi", f"{goruntulenecek_df[urun_adi_sutunu].nunique()}")
-    kpi3.metric(f"KRİTİK SEVİYEDEKİ ÜRÜNLER (<{kritik_seviye_degeri} Koli)", f"{kritik_seviyedeki_urunler_df.shape[0]} Ürün", delta_color="inverse")
-    st.markdown("---")
-    if sadece_kritikleri_goster:
-        gosterilecek_nihai_df = kritik_seviyedeki_urunler_df
-        st.warning(f"Aşağıda sadece stok miktarı {kritik_seviye_degeri} kolinin altına düşmüş ürünler listelenmektedir.")
-    else:
-        gosterilecek_nihai_df = goruntulenecek_df
-    st.subheader("Detaylı Stok Listesi")
-    def highlight_critical(row):
-        if row[miktar_sutunu] < kritik_seviye_degeri: return ['background-color: #5E2A2A'] * len(row)
-        return [''] * len(row)
-    gosterilecek_nihai_df = gosterilecek_nihai_df.sort_values(by=urun_adi_sutunu, ascending=True)
-    if is_aggregated:
-        gosterilecek_sutunlar = [urun_kodu_sutunu, urun_adi_sutunu, miktar_sutunu, fiyat_sutunu, 'Brüt_Tutar']
-        format_sozlugu = {'Brüt_Tutar': '{:,.2f} TL', fiyat_sutunu: '{:,.2f} TL'}
-    else:
-        gosterilecek_sutunlar = [depo_adi_sutunu, urun_kodu_sutunu, urun_adi_sutunu, miktar_sutunu, fiyat_sutunu, brut_tutar_sutunu]
-        format_sozlugu = {brut_tutar_sutunu: '{:,.2f} TL', fiyat_sutunu: '{:,.2f} TL'}
-    st.dataframe(gosterilecek_nihai_df[gosterilecek_sutunlar].style.apply(highlight_critical, axis=1).format(format_sozlugu), use_container_width=True, hide_index=True)
-def page_yaslandirma(satis_df):
-    st.title("⏳ Borç Yaşlandırma Analizi")
-    if satis_df is None:
-        st.warning("Satış verileri yüklenemedi.")
-        return
-    gun_sutunu = 'Gün'
-    if gun_sutunu not in satis_df.columns:
-        st.error(f"HATA: Satış verilerinde ('rapor.xls') '{gun_sutunu}' adında bir sütun bulunamadı!")
-        return
-    st.markdown("Satış temsilcisi seçerek vadesi geçmiş alacakların dökümünü ve özetini görüntüleyin.")
-    temsilci_listesi = sorted(satis_df['ST'].unique())
-    secilen_temsilcisi = st.selectbox('Analiz için bir satış temsilcisi seçin:', temsilci_listesi)
-    if secilen_temsilcisi:
-        temsilci_df = satis_df[satis_df['ST'] == secilen_temsilcisi].copy()
-        gecikmis_df = temsilci_df[(temsilci_df[gun_sutunu] > 0) & (temsilci_df['Kalan Tutar Total'] > 0)]
-        st.markdown("---")
-        st.subheader(f"{secilen_temsilcisi} - Vadesi Geçmiş Alacak Özeti")
-        ustu_35_gun_df = gecikmis_df[gecikmis_df['Gün'] > 35]
-        ustu_45_gun_df = gecikmis_df[gecikmis_df['Gün'] > 45]
-        ustu_60_gun_df = gecikmis_df[gecikmis_df['Gün'] > 60]
-        col1, col2, col3 = st.columns(3)
-        col1.metric("35+ Gün Geçikme", f"{ustu_35_gun_df['Kalan Tutar Total'].sum():,.2f} TL")
-        col2.metric("45+ Gün Geçikme", f"{ustu_45_gun_df['Kalan Tutar Total'].sum():,.2f} TL")
-        col3.metric("60+ Gün Geçikme (Riskli)", f"{ustu_60_gun_df['Kalan Tutar Total'].sum():,.2f} TL")
-        st.markdown("---")
-        min_gun_sayisi = int(gecikmis_df[gun_sutunu].min()) if not gecikmis_df.empty else 0
-        max_gun_sayisi = int(gecikmis_df[gun_sutunu].max()) if not gecikmis_df.empty else 1
-        secilen_gun = st.slider('Özel Gecikme Günü Filtresi', min_gun_sayisi, max_gun_sayisi, max_gun_sayisi)
-        dinamik_gecikmis_df = gecikmis_df[gecikmis_df['Gün'] >= secilen_gun]
-        st.subheader(f"{secilen_gun}+ Gün Gecikmiş Alacakların Detaylı Listesi")
-        if dinamik_gecikmis_df.empty:
-            st.success(f"{secilen_temsilcisi} adlı temsilcinin {secilen_gun} günden fazla gecikmiş alacağı bulunmamaktadır.")
-        else:
-            sirali_liste = dinamik_gecikmis_df.sort_values(by=gun_sutunu, ascending=False)
-            gosterilecek_sutunlar = ['Müşteri', 'Kalan Tutar Total', gun_sutunu]
-            st.dataframe(sirali_liste[gosterilecek_sutunlar], use_container_width=True, hide_index=True, column_config={gun_sutunu: "Gecikme Günü", "Kalan Tutar Total": st.column_config.NumberColumn("Bakiye (TL)", format="%.2f TL")})
-        st.markdown("")
-        if not dinamik_gecikmis_df.empty:
-            st.download_button(label=f"📥 {secilen_gun}+ Gün Raporunu İndir", data=to_excel(dinamik_gecikmis_df), file_name=f"{secilen_temsilcisi}_{secilen_gun}_gun_ustu.xlsx")
-
 def page_satis_hedef(final_df):
     st.title("🎯 Satış / Hedef Analizi")
     if final_df is None or final_df.empty:
@@ -363,10 +272,18 @@ def page_satis_hedef(final_df):
             number = {'prefix': "₺", 'valueformat': ',.0f'}, domain = {'x': [0, 1], 'y': [0.1, 1]},
             title = {'text': f"<b>Aylık Toplam Satış</b><br><span style='font-size:1.0em;color:#FDB022;'><b>Hedef: ₺{toplam_hedef:,.0f}</b></span>", 'font': {"size": 24}},
             delta = {'reference': toplam_hedef, 'relative': False, 'valueformat': ',.0f', 'increasing': {'color': "#2ECC71"}, 'decreasing': {'color': "#E74C3C"}},
-            gauge = {'axis': {'range': [None, toplam_hedef * 1.2], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                     'bar': {'color': "#FDB022"}, 'bgcolor': "white", 'borderwidth': 2, 'bordercolor': "gray",
-                     'steps': [{'range': [0, toplam_hedef * 0.5], 'color': '#FADBD8'}, {'range': [toplam_hedef * 0.5, toplam_hedef * 0.8], 'color': '#FDEBD0'}],
-                     'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': toplam_hedef}}))
+            gauge = {
+                'axis': {'range': [None, toplam_hedef * 1.2], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                # --- DEĞİŞİKLİK BURADA ---
+                'bar': {'color': "#2ECC71"}, # Renk yeşil olarak güncellendi
+                # -------------------------
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "gray",
+                'steps': [{'range': [0, toplam_hedef * 0.5], 'color': '#FADBD8'}, {'range': [toplam_hedef * 0.5, toplam_hedef * 0.8], 'color': '#FDEBD0'}],
+                'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': toplam_hedef}
+            }
+        ))
         
         tamamlanma_yuzdesi = (toplam_satis / toplam_hedef * 100) if toplam_hedef > 0 else 0
         gauge_fig.add_annotation(x=0.5, y=0.08, text=f"<b>%{tamamlanma_yuzdesi:.1f} Tamamlandı</b>", font=dict(size=22, color="#FDB022"), showarrow=False)
@@ -375,7 +292,7 @@ def page_satis_hedef(final_df):
 
         st.markdown("---")
         st.subheader("Temsilci ve Grup Bazında Performans")
-        
+            
         personel_df = final_df[final_df['Satış Temsilcisi'].str.strip() != 'TOPLAM'].copy()
         personel_df = personel_df[personel_df['HEDEF'] > 0]
         personel_df['Performans'] = (personel_df['SATIŞ'] / personel_df['HEDEF'] * 100).fillna(0)
@@ -383,12 +300,15 @@ def page_satis_hedef(final_df):
         personel_df = personel_df.sort_values(by='Performans', ascending=True)
 
         bar_fig = go.Figure()
-        bar_fig.add_trace(go.Bar(y=personel_df['Y_Axis_Label'], x=personel_df['HEDEF'], name='Hedef', orientation='h', text=personel_df['HEDEF'], marker=dict(color='rgba(58, 71, 80, 0.6)', line=dict(color='rgba(58, 71, 80, 1.0)', width=1))))
-        bar_fig.add_trace(go.Bar(y=personel_df['Y_Axis_Label'], x=personel_df['SATIŞ'], name='Satış', orientation='h', text=personel_df['SATIŞ'], marker=dict(color='#FDB022', line=dict(color='#D35400', width=1))))
+        # Hedef: Kırmızı
+        bar_fig.add_trace(go.Bar(y=personel_df['Y_Axis_Label'], x=personel_df['HEDEF'], name='Hedef', orientation='h', text=personel_df['HEDEF'], marker=dict(color='#E74C3C', line=dict(color='#C0392B', width=1))))
+        # Satış: Yeşil
+        bar_fig.add_trace(go.Bar(y=personel_df['Y_Axis_Label'], x=personel_df['SATIŞ'], name='Satış', orientation='h', text=personel_df['SATIŞ'], marker=dict(color='#2ECC71', line=dict(color='#27AE60', width=1))))
+        
         bar_fig.update_traces(texttemplate='₺%{x:,.0f}', textposition='outside', textfont_size=12)
         bar_fig.update_layout(title_text='Satış Temsilcisi Hedef & Satış Karşılaştırması', barmode='group', yaxis_title=None, xaxis_title="Tutar (TL)", legend_title="Gösterge", height=600, margin=dict(l=50, r=50, t=70, b=70), yaxis=dict(categoryorder='total ascending', tickfont=dict(family="Arial Black, sans-serif", size=15, color="#FDB022")), bargap=0.30, bargroupgap=0.1)
         st.plotly_chart(bar_fig, use_container_width=True)
-        
+            
         with st.expander("Detaylı Veri Tablolarını Görüntüle"):
             for title, table in final_df.groupby('Grup'):
                 st.subheader(title)
@@ -397,7 +317,6 @@ def page_satis_hedef(final_df):
 
     except Exception as e:
         st.error(f"Grafikler oluşturulurken veya Excel dosyası ayrıştırılırken bir hata oluştu. Lütfen dosya formatını kontrol edin. Hata: {e}")
-
 def page_solen(solen_borcu_degeri):
     st.title("🎉 Şölen Cari Hesap Özeti")
     st.metric("Güncel Borç Bakiyesi", f"{solen_borcu_degeri:,.2f} TL")
