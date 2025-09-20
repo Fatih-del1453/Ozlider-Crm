@@ -1,3 +1,4 @@
+import branca.colormap as cm
 import streamlit as st
 import pandas as pd
 from streamlit_option_menu import option_menu
@@ -416,6 +417,9 @@ def page_hizmet_faturalari():
     st.title("🧾 Hizmet Faturaları")
     st.warning("Bu sayfa şu anda yapım aşamasındadır.")
 
+# ==========================================================================================
+# MÜŞTERİ ANALİZİ SAYFASI - NİHAİ GÜNCELLEME v9: RENK PALETİ İSİM DÜZELTMESİ
+# ==========================================================================================
 def page_musteri_analizi(satis_df, ilce_df):
     st.title("👥 Müşteri Analizi")
     st.markdown("Değerli, sadık veya hareketsiz müşterilerinizi keşfedin ve bölgesel performansı analiz edin.")
@@ -450,15 +454,10 @@ def page_musteri_analizi(satis_df, ilce_df):
             ["Karanlık (Önerilen)", "Sokak Haritası", "Kabartma (Arazi)"],
             key="harita_stili_secim"
         )
-        
         st.markdown("---")
         st.write("#### Genel Bakış")
         en_iyi_ilce = gosterilecek_veri.sort_values(by='Brüt Fiyat', ascending=False).iloc[0]
-        st.metric(
-            label="En Yüksek Cirolu İlçe",
-            value=en_iyi_ilce['İlçe'],
-            help=f"Değer: {en_iyi_ilce['Brüt Fiyat']:,.0f} TL"
-        )
+        st.metric(label="En Yüksek Cirolu İlçe", value=en_iyi_ilce['İlçe'], help=f"Değer: {en_iyi_ilce['Brüt Fiyat']:,.0f} TL")
 
     with col1:
         try:
@@ -473,37 +472,49 @@ def page_musteri_analizi(satis_df, ilce_df):
 
             m = folium.Map(location=[37.05, 35.35], zoom_start=9.5, tiles=tile)
 
-            folium.Choropleth(
-                geo_data=adana_geojson,
-                name='choropleth',
-                data=gosterilecek_veri,
-                columns=['İlçe', 'Brüt Fiyat'],
-                key_on='feature.properties.name',
-                fill_color='YlOrRd',
-                fill_opacity=0.7,
-                line_opacity=0.9,
-                line_color='white',
-                line_weight=2,
-                legend_name='Toplam Ciro (TL)'
+            veri_sozlugu = gosterilecek_veri.set_index('İlçe')
+            
+            for feature in adana_geojson['features']:
+                ilce_adi = feature['properties']['name']
+                if ilce_adi in veri_sozlugu.index:
+                    feature['properties']['Brüt Fiyat'] = veri_sozlugu.loc[ilce_adi, 'Brüt Fiyat']
+                    feature['properties']['Müşteri Sayısı'] = veri_sozlugu.loc[ilce_adi, 'Müşteri Sayısı']
+
+            # --- DÜZELTME BURADA ---
+            # 'YlOrRd' yerine bu kütüphanede var olan 'YlOrRd_09' kullanıldı.
+            min_ciro = gosterilecek_veri['Brüt Fiyat'].min()
+            max_ciro = gosterilecek_veri['Brüt Fiyat'].max()
+            colormap = cm.linear.YlOrRd_09.scale(min_ciro, max_ciro)
+            colormap.caption = 'Toplam Ciro (TL)'
+
+            geo_json_layer = folium.GeoJson(
+                adana_geojson,
+                style_function=lambda feature: {
+                    'fillColor': colormap(feature['properties'].get('Brüt Fiyat', 0)),
+                    'color': 'white',
+                    'weight': 2,
+                    'fillOpacity': 0.7
+                },
+                tooltip=folium.GeoJsonTooltip(
+                    fields=['name', 'Brüt Fiyat', 'Müşteri Sayısı'],
+                    aliases=['İlçe:', 'Toplam Ciro:', 'Müşteri Sayısı:'],
+                    localize=True,
+                    sticky=False,
+                    labels=True,
+                    style="""
+                        background-color: #2D3748;
+                        color: #FFFFFF;
+                        border: 1px solid #FDB022;
+                        border-radius: 5px;
+                        box-shadow: 3px;
+                        font-size: 16px;
+                        font-family: Arial;
+                        padding: 10px;
+                    """
+                )
             ).add_to(m)
 
-            style_function = lambda x: {'fillColor': '#ffffff', 'color':'#000000', 'fillOpacity': 0.1, 'weight': 0.1}
-            highlight_function = lambda x: {'fillColor': '#000000', 'color':'#000000', 'fillOpacity': 0.50, 'weight': 0.1}
-            
-            bilgi_katmani = folium.features.GeoJson(
-                data=adana_geojson,
-                style_function=style_function, 
-                control=False,
-                highlight_function=highlight_function, 
-                tooltip=folium.features.GeoJsonTooltip(
-                    fields=['name'],
-                    aliases=['İlçe:'],
-                    style=("background-color: white; color: #333333; font-family: arial; font-size: 15px; padding: 10px;") 
-                )
-            )
-            m.add_child(bilgi_katmani)
-            m.keep_in_front(bilgi_katmani)
-            
+            m.add_child(colormap)
             st_folium(m, use_container_width=True, height=550)
 
         except Exception as e:
@@ -543,7 +554,6 @@ def page_musteri_analizi(satis_df, ilce_df):
             st.success("Belirlenen kriterde uyuyan müşteri bulunamadı.")
     else:
         st.warning("Sadık ve uyuyan müşterileri analiz etmek için `rapor.xls` dosyası gereklidir.")
-
 def page_log_raporlari():
     st.title("🗒️ Kullanıcı Aktivite Logları")
     log_file = 'loglar.csv'

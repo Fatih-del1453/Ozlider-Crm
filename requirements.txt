@@ -7,3 +7,6 @@ xlsxwriter
 matplotlib
 plotly
 geopy
+requests
+folium
+streamlit-folium
